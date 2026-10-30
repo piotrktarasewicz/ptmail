@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ptmail"
+version = "0.1.0"
+description = "Prosty klient poczty na Windows dla użytkowników NVDA"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "wxPython>=4.2.2",
+    "keyring>=25",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.gui-scripts]
+ptmail = "ptmail.app:main"
+
+[tool.setuptools.packages.find]
+include = ["ptmail*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
