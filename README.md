@@ -36,8 +36,11 @@ Przy pierwszym uruchomieniu program prosi o konto: adres i hasło aplikacji. Has
 | `ptmail/imap_client.py` | operacje IMAP |
 | `ptmail/imap_parser.py` | parsowanie odpowiedzi serwera, bez sieci |
 | `ptmail/message_parser.py` | treść i załączniki z surowej wiadomości, HTML na czysty tekst |
+| `ptmail/compose.py` | szkice: nowa, odpowiedź, przekazanie, budowa maila |
+| `ptmail/smtp_client.py` | wysyłka SMTP |
 | `ptmail/attachments.py` | zapisywanie i otwieranie załączników |
 | `ptmail/formatting.py` | zdania czytane przez NVDA i tekst wiadomości |
 | `ptmail/speech.py` | komunikaty mówione przez NVDA |
+| `ptmail/sounds.py` | dźwięki pobrania i nowej poczty |
 | `ptmail/accounts.py`, `config.py`, `credentials.py` | konto, konfiguracja, hasło |
 | `ptmail/i18n.py` | tłumaczenia (gettext) |

@@ -16,32 +16,35 @@ class AccountDialog(wx.Dialog):
         self.password = None
         self._provider_keys = list(PROVIDERS)
 
-        self._provider = wx.Choice(
-            self, choices=[PROVIDERS[key].label for key in self._provider_keys]
+        fields = wx.FlexGridSizer(cols=2, vgap=6, hgap=6)
+        fields.AddGrowableCol(1)
+
+        def add_field(label, create):
+            # NVDA bierze nazwę pola z etykiety stworzonej tuż przed nim.
+            fields.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+            control = create()
+            fields.Add(control, 1, wx.EXPAND)
+            return control
+
+        self._provider = add_field(
+            _("Rodzaj konta:"),
+            lambda: wx.Choice(
+                self, choices=[PROVIDERS[key].label for key in self._provider_keys]
+            ),
         )
         self._provider.SetSelection(0)
-        self._name = wx.TextCtrl(self)
-        self._email = wx.TextCtrl(self)
-        self._password = wx.TextCtrl(self, style=wx.TE_PASSWORD)
-        self._status = wx.TextCtrl(self, style=wx.TE_READONLY)
+        self._name = add_field(_("Nazwa konta:"), lambda: wx.TextCtrl(self))
+        self._email = add_field(_("Adres e-mail:"), lambda: wx.TextCtrl(self))
+        self._password = add_field(
+            _("Hasło aplikacji:"), lambda: wx.TextCtrl(self, style=wx.TE_PASSWORD)
+        )
+        self._status = add_field(
+            _("Stan:"), lambda: wx.TextCtrl(self, style=wx.TE_READONLY)
+        )
         if account is not None:
             self._provider.SetSelection(self._provider_keys.index(account.provider_key))
             self._name.SetValue(account.name)
             self._email.SetValue(account.email)
-
-        fields = wx.FlexGridSizer(cols=2, vgap=6, hgap=6)
-        fields.AddGrowableCol(1)
-        for label, control in (
-            (_("Rodzaj konta:"), self._provider),
-            (_("Nazwa konta:"), self._name),
-            (_("Adres e-mail:"), self._email),
-            (_("Hasło aplikacji:"), self._password),
-            (_("Stan:"), self._status),
-        ):
-            fields.Add(
-                wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL
-            )
-            fields.Add(control, 1, wx.EXPAND)
 
         self._ok = wx.Button(self, wx.ID_OK, _("Zapisz"))
         self._ok.SetDefault()

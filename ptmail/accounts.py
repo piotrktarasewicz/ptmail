@@ -9,12 +9,15 @@ class Provider:
     imap_port: int
     smtp_host: str
     smtp_port: int
+    saves_sent: bool  # czy serwer sam odkłada wysłaną pocztę do Wysłanych
 
 
 PROVIDERS = {
-    "gmail": Provider("gmail", "Gmail", "imap.gmail.com", 993, "smtp.gmail.com", 587),
+    "gmail": Provider(
+        "gmail", "Gmail", "imap.gmail.com", 993, "smtp.gmail.com", 587, True
+    ),
     "icloud": Provider(
-        "icloud", "iCloud", "imap.mail.me.com", 993, "smtp.mail.me.com", 587
+        "icloud", "iCloud", "imap.mail.me.com", 993, "smtp.mail.me.com", 587, False
     ),
 }
 

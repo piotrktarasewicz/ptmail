@@ -45,3 +45,10 @@ class MessageContent:
     body: str
     attachments: tuple[Attachment, ...]
     links: tuple[Link, ...] = ()
+    # Pary (nazwa, adres) i identyfikatory potrzebne przy odpowiadaniu.
+    from_addresses: tuple[tuple[str, str], ...] = ()
+    reply_to_addresses: tuple[tuple[str, str], ...] = ()
+    to_addresses: tuple[tuple[str, str], ...] = ()
+    cc_addresses: tuple[tuple[str, str], ...] = ()
+    message_id: str = ""
+    references: str = ""

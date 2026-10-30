@@ -2,6 +2,7 @@
 
 import email
 import re
+from email.utils import getaddresses
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
@@ -165,6 +166,21 @@ def parse_message(raw):
         body=body,
         attachments=tuple(attachments),
         links=links,
+        from_addresses=_addresses(message, "From"),
+        reply_to_addresses=_addresses(message, "Reply-To"),
+        to_addresses=_addresses(message, "To"),
+        cc_addresses=_addresses(message, "Cc"),
+        message_id=str(message.get("Message-ID", "")).strip(),
+        references=" ".join(str(message.get("References", "")).split()),
+    )
+
+
+def _addresses(message, header):
+    values = [str(value) for value in message.get_all(header, [])]
+    return tuple(
+        (decode_header_text(name), address)
+        for name, address in getaddresses(values)
+        if address
     )
 
 

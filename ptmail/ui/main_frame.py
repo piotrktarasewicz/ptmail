@@ -12,20 +12,31 @@ from ..attachments import (
     safe_filename,
     save_to_folder,
 )
+from ..compose import Draft, forward_draft, reply_draft
 from ..config import load_account, save_account
 from ..credentials import get_password, set_password
 from ..formatting import mailbox_sentence, message_sentence
 from ..i18n import _
 from ..mail_worker import INBOX, MailWorker
 from ..message_parser import link_host
+from ..sounds import NEW_MAIL, SYNCED, play
 from ..speech import speak
 from .account_dialog import AccountDialog
+from .compose_dialog import ComposeDialog
 from .list_view import ListView
 from .message_view import MessageView
 
 ALL_KEY = "all"
 ACCOUNT_KEY = "account"
 OPENED_CACHE_SIZE = 30
+
+
+def _newest_new_message(previous, messages):
+    """Zwraca najnowszą wiadomość spoza poprzedniej listy. Lista jest od najnowszej."""
+    if previous is None:
+        return None
+    highest = max((message.uid for message in previous), default=0)
+    return next((m for m in messages if m.uid > highest), None)
 
 
 class MainFrame(wx.Frame):
@@ -40,6 +51,7 @@ class MainFrame(wx.Frame):
         self._opened = {}
         self._pending_open = None
         self._mailbox_key = ALL_KEY
+        self._composing = False
 
         self._build_menu()
         self.CreateStatusBar()
@@ -129,11 +141,26 @@ class MainFrame(wx.Frame):
         self.SetStatusText("")
         self._show_mailbox_rows()
 
-    def on_messages(self, folder, messages):
+    def on_messages(self, folder, messages, refreshed):
+        previous = self._messages.get(folder)
         self._messages[folder] = messages
         self.SetStatusText("")
-        if folder == self._current_folder():
+        current = folder == self._current_folder()
+        if current:
             self._show_message_rows()
+        if refreshed:
+            newest = _newest_new_message(previous, messages)
+            play(NEW_MAIL if newest is not None else SYNCED)
+            if newest is not None and current:
+                self._go_to_new_message(newest)
+
+    def _go_to_new_message(self, message):
+        # Nie przerywamy czytania wiadomości ani pisania.
+        if not self._message_list.IsShown() or self._composing:
+            return
+        self._message_list.select_key(message.uid)
+        if self.IsActive():
+            speak(message_sentence(message, self._row_account_name()))
 
     def on_error(self, text):
         self._say(text)
@@ -143,19 +170,27 @@ class MainFrame(wx.Frame):
         if len(self._opened) > OPENED_CACHE_SIZE:
             del self._opened[next(iter(self._opened))]
         self._mark_seen(folder, uid)
-        if self._pending_open == (folder, uid):
+        pending = self._pending_open
+        if pending is not None and pending[:2] == (folder, uid):
             self._pending_open = None
-            self._show_message(content)
+            pending[2](content)
 
     def on_open_failed(self, folder, uid):
-        if self._pending_open == (folder, uid):
+        pending = self._pending_open
+        if pending is not None and pending[:2] == (folder, uid):
             self._pending_open = None
             self._say(_("Nie udało się otworzyć wiadomości"))
 
+    def on_outgoing_done(self, on_done, success, text):
+        on_done(success, text)
+
     # Widoki
 
+    def _row_account_name(self):
+        return self._account.name if self._mailbox_key == ALL_KEY else None
+
     def _show_message_rows(self):
-        account_name = self._account.name if self._mailbox_key == ALL_KEY else None
+        account_name = self._row_account_name()
         messages = self._messages.get(self._current_folder(), [])
         self._message_list.set_rows(
             [(m.uid, message_sentence(m, account_name)) for m in messages]
@@ -221,6 +256,10 @@ class MainFrame(wx.Frame):
         self._show_view(self._message_list)
 
     def _open_selected_message(self):
+        self._with_selected_content(self._show_message)
+
+    def _with_selected_content(self, action):
+        """Wywołuje action z treścią zaznaczonej wiadomości, w razie potrzeby po pobraniu."""
         uid = self._message_list.selected_key()
         if uid is None or self._worker is None:
             return
@@ -228,9 +267,9 @@ class MainFrame(wx.Frame):
         content = self._opened.get((folder, uid))
         if content is not None:
             self._pending_open = None
-            self._show_message(content)
+            action(content)
         else:
-            self._pending_open = (folder, uid)
+            self._pending_open = (folder, uid, action)
             self._worker.open_message(folder, uid)
 
     def _show_message(self, content):
@@ -253,6 +292,34 @@ class MainFrame(wx.Frame):
     def _back_to_list(self):
         self._pending_open = None
         self._show_view(self._message_list)
+
+    # Pisanie
+
+    def _compose(self, draft):
+        if self._worker is None:
+            self._say(_("Najpierw dodaj konto"))
+            return
+        focused = wx.Window.FindFocus()
+        self._composing = True
+        with ComposeDialog(self, self._account, draft, self._worker) as dialog:
+            dialog.ShowModal()
+            result = dialog.result_text
+        self._composing = False
+        if focused is not None:
+            focused.SetFocus()
+        self.SetStatusText(result)
+
+    def _compose_from_selected(self, build):
+        action = lambda content: self._compose(build(content))
+        if self._message_view.IsShown():
+            action(self._message_view.content)
+        else:
+            self._with_selected_content(action)
+
+    def _reply(self, reply_all):
+        self._compose_from_selected(
+            lambda content: reply_draft(content, self._account.email, reply_all)
+        )
 
     # Linki
 
@@ -338,12 +405,31 @@ class MainFrame(wx.Frame):
     # Zdarzenia
 
     def _on_key(self, event):
+        if self._on_compose_key(event):
+            return
         if self._message_view.IsShown():
             handled = self._on_message_key(event)
         else:
             handled = self._on_list_key(event)
         if not handled:
             event.Skip()
+
+    def _on_compose_key(self, event):
+        if not event.ControlDown() or event.AltDown():
+            return False
+        key = event.GetKeyCode()
+        shift = event.ShiftDown()
+        if key == ord("N") and not shift:
+            self._compose(Draft())
+        elif self._mailbox_view.IsShown():
+            return False
+        elif key == ord("R"):
+            self._reply(reply_all=shift)
+        elif key == ord("L") and not shift:
+            self._compose_from_selected(forward_draft)
+        else:
+            return False
+        return True
 
     def _on_list_key(self, event):
         key = event.GetKeyCode()

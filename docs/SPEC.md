@@ -127,11 +127,11 @@ Przekazanie dalej zachowuje oryginalne załączniki. Wysłana wiadomość trafia
 
 ## Fokus i komunikaty
 
-Fokus nigdy nie skacze sam. Zmienia się tylko po działaniu użytkownika i zawsze w przewidywalne miejsce.
+Fokus nie skacze sam. Zmienia się po działaniu użytkownika, zawsze w przewidywalne miejsce, a jedynym wyjątkiem jest nowa wiadomość na widocznej liście.
 
 - Powrót Escape'em zawsze na ten sam element, z którego się weszło.
-- Nowa poczta w tle nie przesuwa zaznaczenia na liście; nowe wiadomości dopisują się na górze.
-- Pobieranie i synchronizacja są ciche. Brak paska postępu czytanego przez NVDA.
+- Nowa wiadomość dopisuje się na górze, a zaznaczenie przechodzi na najnowszą i NVDA ją czyta. Dotyczy to tylko widocznej listy wiadomości: czytanie treści i pisanie nie są przerywane, a gdy program jest w tle, zaznaczenie przechodzi po cichu.
+- Udane pobranie poczty kończy krótki dźwięk, a nowa poczta ma własny, dwutonowy. Brak paska postępu czytanego przez NVDA.
 - Komunikaty statusu („Wysłano”, „Przeniesiono do kosza”) mówione przez NVDA jednym słowem lub krótkim zdaniem, bez okien dialogowych.
 - Okno dialogowe tylko wtedy, gdy trzeba podjąć decyzję (np. zapisać szkic). Jedno pytanie, jasne przyciski.
 - Błędy połączenia: jedno krótkie zdanie, np. „Brak połączenia z iCloud, spróbuję ponownie”, i żadnego powtarzania przy kolejnych próbach.
@@ -175,3 +175,4 @@ Decyzje podjęte 30 października 2026:
 | Repozytorium | Publiczne na GitHubie |
 | Widok wiadomości | Enter otwiera samą treść, bez linii Od, Do, Data, Temat |
 | Linki | Działające linki w polu tekstowym, bez widoku HTML i bez czytania adresów |
+| Nowa poczta | Dźwięk po pobraniu, a zaznaczenie przechodzi na nową wiadomość |

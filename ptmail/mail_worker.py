@@ -1,10 +1,12 @@
 import queue
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .i18n import _
 from .imap_client import ImapAuthError, ImapClient, ImapConnectionError, ImapError
 from .message_parser import parse_message
+from .smtp_client import SmtpAuthError, SmtpError, SmtpRecipientError, send_mail
 
 INBOX = "INBOX"
 RETRY_SECONDS = 60
@@ -22,6 +24,19 @@ class OpenMessage:
     uid: int
 
 
+@dataclass(frozen=True)
+class SendMail:
+    recipients: tuple[str, ...]
+    raw: bytes
+    on_done: Callable[[bool, str], None]
+
+
+@dataclass(frozen=True)
+class SaveDraft:
+    raw: bytes
+    on_done: Callable[[bool, str], None]
+
+
 class MailWorker(threading.Thread):
     """Jedyny wątek rozmawiający z serwerem, bo połączenia IMAP nie wolno współdzielić.
 
@@ -31,6 +46,7 @@ class MailWorker(threading.Thread):
     def __init__(self, account, password, listener, dispatch):
         super().__init__(daemon=True)
         self._account = account
+        self._password = password
         self._client = ImapClient(account, password)
         self._listener = listener
         self._dispatch = dispatch
@@ -47,6 +63,12 @@ class MailWorker(threading.Thread):
     def open_message(self, folder, uid):
         self._requests.put(OpenMessage(folder, uid))
 
+    def send(self, recipients, raw, on_done):
+        self._requests.put(SendMail(tuple(recipients), raw, on_done))
+
+    def save_draft(self, raw, on_done):
+        self._requests.put(SaveDraft(raw, on_done))
+
     def stop(self):
         self._stopped.set()
         self._requests.put(None)
@@ -62,6 +84,10 @@ class MailWorker(threading.Thread):
             if isinstance(request, OpenMessage):
                 # Bez ponawiania: otwarcie po minucie przesunęłoby fokus bez działania użytkownika.
                 self._open_message(request)
+            elif isinstance(request, SendMail):
+                self._send(request)
+            elif isinstance(request, SaveDraft):
+                self._save_draft(request)
             elif request is not None:
                 retry = self._process(request)
         self._client.close()
@@ -96,7 +122,9 @@ class MailWorker(threading.Thread):
             folders = self._with_client(self._client.list_folders)
             self._emit(self._listener.on_folders, folders)
         messages = self._with_client(self._client.fetch_recent, request.folder)
-        self._emit(self._listener.on_messages, request.folder, messages)
+        self._emit(
+            self._listener.on_messages, request.folder, messages, request.with_folders
+        )
         self._error_reported = False
 
     def _open_message(self, request):
@@ -114,6 +142,47 @@ class MailWorker(threading.Thread):
             request.uid,
             parse_message(raw),
         )
+
+    def _send(self, request):
+        try:
+            refused = send_mail(
+                self._account, self._password, request.recipients, request.raw
+            )
+        except SmtpAuthError:
+            self._finish(request, False, _("Serwer odrzucił hasło aplikacji"))
+            return
+        except SmtpRecipientError:
+            self._finish(request, False, _("Serwer odrzucił adres odbiorcy"))
+            return
+        except SmtpError:
+            self._finish(request, False, _("Nie udało się wysłać wiadomości"))
+            return
+        if refused:
+            text = _("Wysłano, ale serwer odrzucił część odbiorców")
+        else:
+            text = _("Wysłano")
+        if not self._account.provider.saves_sent and not self._append(
+            "sent", "(\\Seen)", request.raw
+        ):
+            text = _("Wysłano, ale nie zapisano w folderze Wysłane")
+        self._finish(request, True, text)
+
+    def _save_draft(self, request):
+        if self._append("drafts", "(\\Draft \\Seen)", request.raw):
+            self._finish(request, True, _("Zapisano w roboczych"))
+        else:
+            self._finish(request, False, _("Nie udało się zapisać w roboczych"))
+
+    def _append(self, role, flags, raw):
+        try:
+            self._with_client(self._client.append, role, flags, raw)
+        except ImapError:
+            self._client.close()
+            return False
+        return True
+
+    def _finish(self, request, success, text):
+        self._emit(self._listener.on_outgoing_done, request.on_done, success, text)
 
     def _with_client(self, action, *args):
         """Wykonuje działanie, a gdy serwer zerwał bezczynne połączenie, łączy się raz od nowa."""

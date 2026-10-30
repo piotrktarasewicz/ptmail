@@ -102,6 +102,14 @@ class ImapClient:
         self._call(self._imap.uid, "STORE", str(uid), "+FLAGS.SILENT", "(\\Seen)")
         return raw
 
+    def append(self, role, flags, raw):
+        """Dopisuje wiadomość do folderu o danej roli, np. Wysłane lub Robocze."""
+        folders = parse_folders(self._call(self._imap.list))
+        folder = next((f for f in folders if f.role == role), None)
+        if folder is None:
+            raise ImapError(f"Brak folderu {role}")
+        self._call(self._imap.append, quote(folder.name), flags, None, raw)
+
     def _unread(self, folder):
         return parse_unread(self._call(self._imap.status, quote(folder), "(UNSEEN)"))
 
