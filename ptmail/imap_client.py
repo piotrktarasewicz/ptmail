@@ -1,11 +1,17 @@
 import imaplib
+import re
 import ssl
+import time
 from dataclasses import replace
 from datetime import date, timedelta
 
 from .imap_parser import parse_body, parse_fetch, parse_folders, parse_unread
 
 TIMEOUT_SECONDS = 30
+IDLE_TAG = b"PTIDLE"
+IDLE_ACK_SECONDS = 30
+IDLE_POLL_SECONDS = 5
+EXISTS_RE = re.compile(rb"\* \d+ EXISTS\b")
 CACHE_DAYS = 90
 MESSAGE_LIMIT = 200
 FETCH_ITEMS = "(UID FLAGS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
@@ -110,6 +116,63 @@ class ImapClient:
             raise ImapError(f"Brak folderu {role}")
         self._call(self._imap.append, quote(folder.name), flags, None, raw)
 
+    def select_for_idle(self, folder):
+        self._call(self._imap.select, quote(folder), True)
+
+    def wait_for_new_mail(self, seconds, stopped):
+        """Czeka w trybie IDLE. Zwraca True, gdy serwer zgłosił nową wiadomość.
+
+        imaplib w Pythonie 3.13 nie zna IDLE, a czytanie przez jego plik psuje się
+        po pierwszym przekroczeniu czasu, więc czytamy wprost z gniazda.
+        """
+        lines = _SocketLines(self._imap.sock)
+        has_mail = False
+        try:
+            self._imap.send(IDLE_TAG + b" IDLE\r\n")
+            has_mail = self._await_idle_start(lines)
+            if not has_mail:
+                has_mail = self._await_exists(lines, seconds, stopped)
+            self._imap.send(b"DONE\r\n")
+            return self._await_idle_end(lines) or has_mail
+        except (OSError, EOFError) as error:
+            raise ImapConnectionError(str(error)) from error
+        finally:
+            lines.restore_timeout()
+
+    def _await_idle_start(self, lines):
+        has_mail = False
+        while True:
+            line = lines.read(IDLE_ACK_SECONDS)
+            if line is None:
+                raise ImapConnectionError("Brak odpowiedzi na IDLE")
+            if line.startswith(b"+"):
+                return has_mail
+            if line.startswith(IDLE_TAG):
+                raise ImapError(line.decode("ascii", "replace"))
+            has_mail = has_mail or _is_new_mail(line)
+
+    def _await_exists(self, lines, seconds, stopped):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline and not stopped():
+            line = lines.read(IDLE_POLL_SECONDS)
+            if line is None:
+                continue
+            if line.startswith(b"* BYE"):
+                raise ImapConnectionError("Serwer zakończył połączenie")
+            if _is_new_mail(line):
+                return True
+        return False
+
+    def _await_idle_end(self, lines):
+        has_mail = False
+        while True:
+            line = lines.read(IDLE_ACK_SECONDS)
+            if line is None:
+                raise ImapConnectionError("Brak odpowiedzi na DONE")
+            if line.startswith(IDLE_TAG):
+                return has_mail
+            has_mail = has_mail or _is_new_mail(line)
+
     def _unread(self, folder):
         return parse_unread(self._call(self._imap.status, quote(folder), "(UNSEEN)"))
 
@@ -123,6 +186,35 @@ class ImapClient:
         if status != "OK":
             raise ImapError(str(data))
         return data
+
+
+class _SocketLines:
+    """Czyta wiersze wprost z gniazda z limitem czasu na każdy odczyt."""
+
+    def __init__(self, sock):
+        self._sock = sock
+        self._buffer = b""
+
+    def read(self, timeout):
+        """Zwraca wiersz albo None, gdy w tym czasie nic nie przyszło."""
+        self._sock.settimeout(timeout)
+        while b"\r\n" not in self._buffer:
+            try:
+                chunk = self._sock.recv(4096)
+            except TimeoutError:
+                return None
+            if not chunk:
+                raise EOFError("Serwer zamknął połączenie")
+            self._buffer += chunk
+        line, _crlf, self._buffer = self._buffer.partition(b"\r\n")
+        return line
+
+    def restore_timeout(self):
+        self._sock.settimeout(TIMEOUT_SECONDS)
+
+
+def _is_new_mail(line):
+    return EXISTS_RE.match(line) is not None
 
 
 def _sort_key(message):

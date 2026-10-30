@@ -17,6 +17,7 @@ from ..config import load_account, save_account
 from ..credentials import get_password, set_password
 from ..formatting import mailbox_sentence, message_sentence
 from ..i18n import _
+from ..idle_watcher import IdleWatcher
 from ..mail_worker import INBOX, MailWorker
 from ..message_parser import link_host
 from ..sounds import NEW_MAIL, SYNCED, play
@@ -46,6 +47,7 @@ class MainFrame(wx.Frame):
         super().__init__(None, title=APP_NAME, size=(800, 600))
         self._account = None
         self._worker = None
+        self._watcher = None
         self._folders = []
         self._messages = {}
         self._opened = {}
@@ -112,6 +114,10 @@ class MainFrame(wx.Frame):
         self._show_mailbox_rows()
         self._worker = MailWorker(account, password, self, self._dispatch)
         self._worker.start()
+        self._watcher = IdleWatcher(
+            account, password, self._worker.refresh_inbox_silently
+        )
+        self._watcher.start()
         self._check_mail()
 
     def _check_mail(self):
@@ -141,7 +147,7 @@ class MainFrame(wx.Frame):
         self.SetStatusText("")
         self._show_mailbox_rows()
 
-    def on_messages(self, folder, messages, refreshed):
+    def on_messages(self, folder, messages, refreshed, silent=False):
         previous = self._messages.get(folder)
         self._messages[folder] = messages
         self.SetStatusText("")
@@ -150,9 +156,12 @@ class MainFrame(wx.Frame):
             self._show_message_rows()
         if refreshed:
             newest = _newest_new_message(previous, messages)
-            play(NEW_MAIL if newest is not None else SYNCED)
-            if newest is not None and current:
-                self._go_to_new_message(newest)
+            if newest is not None:
+                play(NEW_MAIL)
+                if current:
+                    self._go_to_new_message(newest)
+            elif not silent:
+                play(SYNCED)
 
     def _go_to_new_message(self, message):
         # Nie przerywamy czytania wiadomości ani pisania.
@@ -480,3 +489,6 @@ class MainFrame(wx.Frame):
         worker, self._worker = self._worker, None
         if worker is not None:
             worker.stop()
+        watcher, self._watcher = self._watcher, None
+        if watcher is not None:
+            watcher.stop()

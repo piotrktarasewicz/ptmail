@@ -16,6 +16,7 @@ RETRY_SECONDS = 60
 class Request:
     folder: str
     with_folders: bool
+    silent: bool = False
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,10 @@ class MailWorker(threading.Thread):
 
     def refresh(self, folder):
         self._requests.put(Request(folder, with_folders=True))
+
+    def refresh_inbox_silently(self):
+        """Odświeżenie zgłoszone przez serwer: bez dźwięku, jeśli nic nowego nie ma."""
+        self._requests.put(Request(INBOX, with_folders=True, silent=True))
 
     def open_folder(self, folder):
         self._requests.put(Request(folder, with_folders=False))
@@ -123,7 +128,11 @@ class MailWorker(threading.Thread):
             self._emit(self._listener.on_folders, folders)
         messages = self._with_client(self._client.fetch_recent, request.folder)
         self._emit(
-            self._listener.on_messages, request.folder, messages, request.with_folders
+            self._listener.on_messages,
+            request.folder,
+            messages,
+            request.with_folders,
+            request.silent,
         )
         self._error_reported = False
 

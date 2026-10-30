@@ -28,7 +28,7 @@ Stos technologiczny:
 
 - **Język i interfejs:** Python + wxPython, ten sam stos co PT Calendar Manager. Interfejs po polsku, ale od początku z obsługą tłumaczeń (gettext).
 - **Pamięć podręczna:** lokalna baza SQLite z nagłówkami i treścią wiadomości z ostatnich 90 dni, żeby listy otwierały się natychmiast. Starsza poczta zostaje tylko na serwerze.
-- **Nowa poczta:** IMAP IDLE, czyli serwer sam powiadamia o nowych wiadomościach, bez ciągłego odpytywania.
+- **Nowa poczta:** IMAP IDLE na osobnym połączeniu z folderem Odebrane, czyli serwer sam powiadamia o nowych wiadomościach, bez ciągłego odpytywania. Inne foldery odświeża F5.
 - **Hasła:** Menedżer poświadczeń Windows (biblioteka keyring), nigdy w pliku konfiguracyjnym.
 - **Treść wiadomości:** HTML zamieniony na czysty tekst, bo tylko on zawiera opisy linków, a gdy go brak, część tekstowa maila.
 
@@ -131,7 +131,7 @@ Fokus nie skacze sam. Zmienia się po działaniu użytkownika, zawsze w przewidy
 
 - Powrót Escape'em zawsze na ten sam element, z którego się weszło.
 - Nowa wiadomość dopisuje się na górze, a zaznaczenie przechodzi na najnowszą i NVDA ją czyta. Dotyczy to tylko widocznej listy wiadomości: czytanie treści i pisanie nie są przerywane, a gdy program jest w tle, zaznaczenie przechodzi po cichu.
-- Udane pobranie poczty kończy krótki dźwięk, a nowa poczta ma własny, dwutonowy. Brak paska postępu czytanego przez NVDA.
+- Pobranie poczty na żądanie (start, F5) kończy krótki dźwięk, a nowa poczta ma własny, dwutonowy. Automatyczne odświeżenie bez nowej poczty jest ciche. Brak paska postępu czytanego przez NVDA.
 - Komunikaty statusu („Wysłano”, „Przeniesiono do kosza”) mówione przez NVDA jednym słowem lub krótkim zdaniem, bez okien dialogowych.
 - Okno dialogowe tylko wtedy, gdy trzeba podjąć decyzję (np. zapisać szkic). Jedno pytanie, jasne przyciski.
 - Błędy połączenia: jedno krótkie zdanie, np. „Brak połączenia z iCloud, spróbuję ponownie”, i żadnego powtarzania przy kolejnych próbach.

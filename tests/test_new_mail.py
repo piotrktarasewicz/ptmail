@@ -77,6 +77,30 @@ def test_deleted_message_is_not_news(frame):
     assert frame.played == [SYNCED, SYNCED]
 
 
+def test_automatic_refresh_without_news_is_silent(frame):
+    load(frame, 1)
+    frame.on_messages("INBOX", [message(1)], True, True)
+    assert frame.played == [SYNCED]
+
+
+def test_automatic_refresh_announces_new_mail(frame):
+    load(frame, 1)
+    frame.on_messages("INBOX", [message(2), message(1)], True, True)
+    assert frame.played == [SYNCED, NEW_MAIL]
+    assert frame._message_list.selected_key() == 2
+
+
+def test_new_mail_in_other_folder_only_plays_sound(frame):
+    load(frame, 1)
+    frame._mailbox_key = "Sent Messages"
+    frame.on_messages("Sent Messages", [message(9)], False)
+    frame._show_message_rows()
+    frame.on_messages("INBOX", [message(2), message(1)], True, True)
+    assert frame.played == [SYNCED, NEW_MAIL]
+    assert frame._message_list.selected_key() == 9
+    assert frame.spoken == []
+
+
 def test_opening_folder_makes_no_sound(frame):
     load(frame, 1, refreshed=False)
     assert frame.played == []
