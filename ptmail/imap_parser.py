@@ -116,6 +116,14 @@ def parse_fetch(data):
     return messages
 
 
+def parse_body(data):
+    """Wyciąga surową wiadomość z odpowiedzi na FETCH BODY[]."""
+    for item in data:
+        if isinstance(item, tuple) and b"BODY[" in item[0]:
+            return item[1]
+    return None
+
+
 def _parse_message(meta, header):
     uid = UID_RE.search(meta)
     if uid is None or header is None:
@@ -126,8 +134,8 @@ def _parse_message(meta, header):
     return Message(
         uid=int(uid.group(1)),
         sender=_sender(parsed.get("From", "")),
-        subject=_decode_header(parsed.get("Subject", "")),
-        date=_date(parsed.get("Date")),
+        subject=decode_header_text(parsed.get("Subject", "")),
+        date=parse_date(parsed.get("Date")),
         seen=b"\\seen" in flags,
         flagged=b"\\flagged" in flags,
         attachments=len(ATTACHMENT_RE.findall(meta)),
@@ -135,11 +143,11 @@ def _parse_message(meta, header):
 
 
 def _sender(value):
-    name, address = parseaddr(_decode_header(value))
+    name, address = parseaddr(decode_header_text(value))
     return name or address
 
 
-def _decode_header(value):
+def decode_header_text(value):
     try:
         text = str(make_header(decode_header(str(value))))
     except (LookupError, UnicodeDecodeError, ValueError):
@@ -147,7 +155,7 @@ def _decode_header(value):
     return " ".join(text.split())
 
 
-def _date(value):
+def parse_date(value):
     if not value:
         return None
     try:

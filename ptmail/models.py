@@ -19,3 +19,29 @@ class Message:
     seen: bool
     flagged: bool
     attachments: int
+
+
+@dataclass(frozen=True)
+class Attachment:
+    filename: str
+    content_type: str
+    data: bytes
+
+
+@dataclass(frozen=True)
+class Link:
+    start: int  # pozycje w treści, w znakach Pythona
+    end: int
+    url: str
+    text: str
+
+
+@dataclass(frozen=True)
+class MessageContent:
+    sender: str
+    recipients: str
+    subject: str
+    date: datetime | None
+    body: str
+    attachments: tuple[Attachment, ...]
+    links: tuple[Link, ...] = ()

@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "wxPython>=4.2.2",
     "keyring>=25",
+    "accessible-output2>=0.17",
 ]
 
 [project.optional-dependencies]

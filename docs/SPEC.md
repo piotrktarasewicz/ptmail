@@ -30,7 +30,7 @@ Stos technologiczny:
 - **Pamięć podręczna:** lokalna baza SQLite z nagłówkami i treścią wiadomości z ostatnich 90 dni, żeby listy otwierały się natychmiast. Starsza poczta zostaje tylko na serwerze.
 - **Nowa poczta:** IMAP IDLE, czyli serwer sam powiadamia o nowych wiadomościach, bez ciągłego odpytywania.
 - **Hasła:** Menedżer poświadczeń Windows (biblioteka keyring), nigdy w pliku konfiguracyjnym.
-- **Treść wiadomości:** część tekstowa maila, a gdy jej brak, HTML zamieniony na czysty tekst.
+- **Treść wiadomości:** HTML zamieniony na czysty tekst, bo tylko on zawiera opisy linków, a gdy go brak, część tekstowa maila.
 
 Gmailowe specyfiki: foldery systemowe są w `[Gmail]`, a „Wszystkie wiadomości” i „Ważne” pomijamy przy synchronizacji, bo dublują skrzynkę. Archiwizacja w Gmailu oznacza usunięcie etykiety Odebrane.
 
@@ -83,9 +83,17 @@ Wiadomość otwiera się jako jedno pole tekstowe tylko do odczytu, czytane strz
 
 Układ pola, od góry:
 
-1. Nagłówek w czterech liniach: Od, Do, Data, Temat.
-2. Pusta linia, potem treść jako czysty tekst. Linki zostają jako zwykły tekst adresu.
-3. Na końcu linia „Załączniki: 2” (lub „Brak załączników”).
+1. Sama treść jako czysty tekst, bez nagłówka. Nadawcę, temat i datę czyta się z wiersza na liście. Obrazki są pomijane, chyba że są linkiem i mają opis.
+2. Na końcu linia „Załączniki: 2” (lub „Brak załączników”).
+
+Linki czytane są swoim opisem, a adres pozostaje ukryty. Link bez opisu ma etykietę z domeną, np. „link allegro.pl”.
+
+| Klawisz w treści | Czynność |
+| --- | --- |
+| Enter na linku | otwórz w domyślnej przeglądarce |
+| Alt+L | następny link |
+| Alt+Shift+L | poprzedni link |
+| Alt+A | przeczytaj domenę linku; pełny adres pojawia się na pasku stanu |
 
 Tab przenosi z treści do **listy załączników** pod polem tekstowym. Każdy wiersz: nazwa pliku, typ, rozmiar, np. „faktura.pdf, PDF, 120 KB”.
 
@@ -165,3 +173,5 @@ Decyzje podjęte 30 października 2026:
 | Poczta na komputerze | Ostatnie 90 dni; starsza przez wyszukiwanie na serwerze lub stronę WWW |
 | Język | Na razie tylko polski, z obsługą tłumaczeń od początku |
 | Repozytorium | Publiczne na GitHubie |
+| Widok wiadomości | Enter otwiera samą treść, bez linii Od, Do, Data, Temat |
+| Linki | Działające linki w polu tekstowym, bez widoku HTML i bez czytania adresów |

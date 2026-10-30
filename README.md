@@ -31,10 +31,13 @@ Przy pierwszym uruchomieniu program prosi o konto: adres i hasło aplikacji. Has
 | Plik | Rola |
 | --- | --- |
 | `ptmail/app.py` | start programu |
-| `ptmail/ui/` | okno główne, listy, okno konta |
+| `ptmail/ui/` | okno główne, listy, widok wiadomości, okno konta |
 | `ptmail/mail_worker.py` | wątek w tle, jedyne miejsce używające połączenia IMAP |
 | `ptmail/imap_client.py` | operacje IMAP |
 | `ptmail/imap_parser.py` | parsowanie odpowiedzi serwera, bez sieci |
-| `ptmail/formatting.py` | zdania czytane przez NVDA |
+| `ptmail/message_parser.py` | treść i załączniki z surowej wiadomości, HTML na czysty tekst |
+| `ptmail/attachments.py` | zapisywanie i otwieranie załączników |
+| `ptmail/formatting.py` | zdania czytane przez NVDA i tekst wiadomości |
+| `ptmail/speech.py` | komunikaty mówione przez NVDA |
 | `ptmail/accounts.py`, `config.py`, `credentials.py` | konto, konfiguracja, hasło |
 | `ptmail/i18n.py` | tłumaczenia (gettext) |

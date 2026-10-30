@@ -18,6 +18,9 @@ class ListView(wx.Panel):
         sizer.Add(self.list, 1, wx.EXPAND | wx.ALL, 4)
         self.SetSizer(sizer)
 
+    def focus(self):
+        self.list.SetFocus()
+
     def set_rows(self, rows):
         """Podmienia wiersze (klucz, tekst), zostawiając zaznaczenie na tym samym kluczu."""
         keys = [key for key, _text in rows]

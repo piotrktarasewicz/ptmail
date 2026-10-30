@@ -1,6 +1,7 @@
 """Zdania czytane przez NVDA na listach."""
 
 from datetime import datetime, timedelta
+from pathlib import PurePath
 
 from .i18n import _, plural
 
@@ -41,6 +42,55 @@ def format_date(value, now=None):
     if day < today and day.isocalendar()[:2] == today.isocalendar()[:2]:
         return _(WEEKDAYS[day.weekday()])
     return value.strftime("%d.%m.%Y")
+
+
+def format_size(size):
+    if size < 1024:
+        return _("{size} B").format(size=size)
+    if size < 1024 * 1024:
+        return _("{size} KB").format(size=round(size / 1024))
+    return _("{size} MB").format(size=f"{size / 1024 / 1024:.1f}".replace(".", ","))
+
+
+def attachment_sentence(attachment):
+    """Nazwa pliku, typ i rozmiar, np. faktura.pdf, PDF, 120 KB."""
+    extension = PurePath(attachment.filename).suffix.lstrip(".")
+    kind = extension or attachment.content_type.partition("/")[2]
+    return ", ".join(
+        (attachment.filename, kind.upper(), format_size(len(attachment.data)))
+    )
+
+
+def message_document(content):
+    """Tekst pola wiadomości: sama treść i na końcu linia o załącznikach."""
+    count = len(content.attachments)
+    footer = (
+        _("Załączniki: {count}").format(count=count)
+        if count
+        else _("Brak załączników")
+    )
+    return "\n\n".join(part for part in (content.body, footer) if part)
+
+
+def utf16_ranges(text, links):
+    """Przelicza pozycje linków na jednostki UTF-16 używane przez pole Windows.
+
+    Emoji to w Pythonie jeden znak, a w polu Windows dwa, więc bez tego
+    wszystkie linki za emoji byłyby przesunięte.
+    """
+    ranges = []
+    position = 0
+    extra = 0
+
+    def advance(index):
+        nonlocal position, extra
+        extra += sum(1 for char in text[position:index] if ord(char) > 0xFFFF)
+        position = index
+        return index + extra
+
+    for link in sorted(links, key=lambda item: item.start):
+        ranges.append((advance(link.start), advance(link.end), link))
+    return ranges
 
 
 def message_sentence(message, account_name=None, now=None):

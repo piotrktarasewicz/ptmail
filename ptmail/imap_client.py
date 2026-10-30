@@ -3,7 +3,7 @@ import ssl
 from dataclasses import replace
 from datetime import date, timedelta
 
-from .imap_parser import parse_fetch, parse_folders, parse_unread
+from .imap_parser import parse_body, parse_fetch, parse_folders, parse_unread
 
 TIMEOUT_SECONDS = 30
 CACHE_DAYS = 90
@@ -91,6 +91,16 @@ class ImapClient:
             self._imap.uid, "FETCH", b",".join(uids).decode("ascii"), FETCH_ITEMS
         )
         return sorted(parse_fetch(data), key=_sort_key, reverse=True)
+
+    def fetch_message(self, folder, uid):
+        """Pobiera całą wiadomość i oznacza ją jako przeczytaną."""
+        self._call(self._imap.select, quote(folder), False)
+        data = self._call(self._imap.uid, "FETCH", str(uid), "(BODY.PEEK[])")
+        raw = parse_body(data)
+        if raw is None:
+            raise ImapError(f"Brak wiadomości {uid}")
+        self._call(self._imap.uid, "STORE", str(uid), "+FLAGS.SILENT", "(\\Seen)")
+        return raw
 
     def _unread(self, folder):
         return parse_unread(self._call(self._imap.status, quote(folder), "(UNSEEN)"))
