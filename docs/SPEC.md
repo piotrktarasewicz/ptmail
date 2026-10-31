@@ -75,7 +75,13 @@ Czynności na zaznaczonej wiadomości (odpowiednik pokrętła czynności VoiceOv
 | Ctrl+N | nowa wiadomość |
 | F5 | sprawdź pocztę teraz |
 
-Klawisz aplikacji (lub Shift+F10) otwiera menu z tymi samymi czynnościami, a przy każdej pozycji jest jej skrót. Po usunięciu lub archiwizacji fokus przechodzi na następną wiadomość i NVDA od razu ją czyta.
+Klawisz aplikacji (lub Shift+F10) otwiera menu z tymi samymi czynnościami, a przy każdej pozycji jest jej skrót. Po usunięciu lub archiwizacji fokus przechodzi na następną wiadomość i NVDA od razu ją czyta; gdy starszej nie ma, na poprzednią.
+
+Delete, Ctrl+Shift+A, Ctrl+U i Ctrl+Shift+F działają też w widoku wiadomości. Usunięcie lub archiwizacja wraca wtedy na listę, na następną wiadomość.
+
+Po Delete NVDA czyta od razu następną wiadomość, bez komunikatu „Przeniesiono do kosza”, który przy kasowaniu serii męczy. Komunikat pada tylko wtedy, gdy lista została pusta, a na pasku stanu jest zawsze.
+
+Delete w Koszu nic nie usuwa: PT Mail nie kasuje poczty na stałe. W Gmailu archiwizować można tylko z Odebranych.
 
 ## Widok wiadomości i załączniki
 
@@ -106,7 +112,7 @@ Tab przenosi z treści do **listy załączników** pod polem tekstowym. Każdy w
 Skróty dostępne w całym oknie wiadomości:
 
 - Alt+Z: skok prosto do listy załączników, bez przechodzenia Tabem.
-- Ctrl+R, Ctrl+Shift+R, Ctrl+L, Delete: jak na liście wiadomości.
+- Ctrl+R, Ctrl+Shift+R, Ctrl+L, Delete, Ctrl+Shift+A, Ctrl+U, Ctrl+Shift+F: jak na liście wiadomości.
 - Alt+strzałka w dół / w górę: następna / poprzednia wiadomość bez wracania do listy.
 - Escape: powrót do listy, fokus na tej samej wiadomości.
 

@@ -25,7 +25,12 @@ class ListView(wx.Panel):
         """Podmienia wiersze (klucz, tekst), zostawiając zaznaczenie na tym samym kluczu."""
         keys = [key for key, _text in rows]
         texts = [text for _key, text in rows]
-        if keys == self._keys and texts == self._texts:
+        if keys == self._keys:
+            # Zmieniamy tylko inne wiersze, żeby NVDA nie gubił pozycji na liście.
+            for index, (old, new) in enumerate(zip(self._texts, texts)):
+                if old != new:
+                    self.list.SetString(index, new)
+            self._texts = texts
             return
         selected = self.selected_key()
         self._keys = keys

@@ -1,7 +1,7 @@
 import threading
 
 from ptmail.accounts import Account
-from ptmail.imap_client import ImapConnectionError
+from ptmail.imap_client import ImapConnectionError, ImapError
 from ptmail.mail_worker import MailWorker
 
 RAW = b"From: a@b.pl\r\nSubject: x\r\n\r\ntresc"
@@ -56,6 +56,33 @@ def open_message(client):
     worker.stop()
     worker.join(2)
     return listener.results
+
+
+def test_failed_action_is_reported():
+    failures = []
+    done = threading.Event()
+
+    class ActionListener:
+        def on_action_failed(self, text):
+            failures.append(text)
+            done.set()
+
+    def fail(client):
+        raise ImapError("nie")
+
+    worker = MailWorker(
+        Account("iCloud", "a@example.com", "icloud"),
+        "x",
+        ActionListener(),
+        lambda _worker, handler, *args: handler(*args),
+    )
+    worker._client = FakeClient(failures=0)
+    worker.start()
+    worker.perform(fail, "Nie udało się")
+    assert done.wait(2)
+    worker.stop()
+    worker.join(2)
+    assert failures == ["Nie udało się"]
 
 
 def test_dropped_connection_is_restored_once():

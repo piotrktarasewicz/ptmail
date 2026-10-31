@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from .imap_parser import parse_body, parse_fetch, parse_folders, parse_unread
 
 TIMEOUT_SECONDS = 30
+INBOX = "INBOX"
 IDLE_TAG = b"PTIDLE"
 IDLE_ACK_SECONDS = 30
 IDLE_POLL_SECONDS = 5
@@ -44,6 +45,7 @@ class ImapClient:
         self._account = account
         self._password = password
         self._imap = None
+        self._role_folders = {}
 
     @property
     def connected(self):
@@ -110,11 +112,32 @@ class ImapClient:
 
     def append(self, role, flags, raw):
         """Dopisuje wiadomość do folderu o danej roli, np. Wysłane lub Robocze."""
-        folders = parse_folders(self._call(self._imap.list))
-        folder = next((f for f in folders if f.role == role), None)
-        if folder is None:
+        folder = self._folder_for_role(role)
+        self._call(self._imap.append, quote(folder), flags, None, raw)
+
+    def move(self, folder, uid, role):
+        """Przenosi wiadomość do folderu o danej roli, np. Kosz lub Archiwum."""
+        target = self._folder_for_role(role)
+        self._call(self._imap.select, quote(folder), False)
+        self._call(self._imap.uid, "MOVE", str(uid), quote(target))
+
+    def remove_inbox_label(self, uid):
+        """Archiwizacja w Gmailu: wiadomość traci etykietę Odebrane."""
+        self._call(self._imap.select, quote(INBOX), False)
+        self._call(self._imap.uid, "STORE", str(uid), "-X-GM-LABELS", "(\\Inbox)")
+
+    def set_flag(self, folder, uid, flag, value):
+        self._call(self._imap.select, quote(folder), False)
+        command = "+FLAGS.SILENT" if value else "-FLAGS.SILENT"
+        self._call(self._imap.uid, "STORE", str(uid), command, f"({flag})")
+
+    def _folder_for_role(self, role):
+        if role not in self._role_folders:
+            folders = parse_folders(self._call(self._imap.list))
+            self._role_folders = {f.role: f.name for f in folders if f.role}
+        if role not in self._role_folders:
             raise ImapError(f"Brak folderu {role}")
-        self._call(self._imap.append, quote(folder.name), flags, None, raw)
+        return self._role_folders[role]
 
     def select_for_idle(self, folder):
         self._call(self._imap.select, quote(folder), True)

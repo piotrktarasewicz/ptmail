@@ -26,6 +26,12 @@ class OpenMessage:
 
 
 @dataclass(frozen=True)
+class MessageAction:
+    run: Callable[[ImapClient], None]
+    failure_text: str
+
+
+@dataclass(frozen=True)
 class SendMail:
     recipients: tuple[str, ...]
     raw: bytes
@@ -55,8 +61,12 @@ class MailWorker(threading.Thread):
         self._stopped = threading.Event()
         self._error_reported = False
 
-    def refresh(self, folder):
-        self._requests.put(Request(folder, with_folders=True))
+    def refresh(self, folder, silent=False):
+        self._requests.put(Request(folder, with_folders=True, silent=silent))
+
+    def perform(self, run, failure_text):
+        """Zleca czynność na wiadomości. Okno pokazało już jej skutek."""
+        self._requests.put(MessageAction(run, failure_text))
 
     def refresh_inbox_silently(self):
         """Odświeżenie zgłoszone przez serwer: bez dźwięku, jeśli nic nowego nie ma."""
@@ -89,6 +99,8 @@ class MailWorker(threading.Thread):
             if isinstance(request, OpenMessage):
                 # Bez ponawiania: otwarcie po minucie przesunęłoby fokus bez działania użytkownika.
                 self._open_message(request)
+            elif isinstance(request, MessageAction):
+                self._perform(request)
             elif isinstance(request, SendMail):
                 self._send(request)
             elif isinstance(request, SaveDraft):
@@ -151,6 +163,13 @@ class MailWorker(threading.Thread):
             request.uid,
             parse_message(raw),
         )
+
+    def _perform(self, request):
+        try:
+            self._with_client(request.run, self._client)
+        except ImapError:
+            self._client.close()
+            self._emit(self._listener.on_action_failed, request.failure_text)
 
     def _send(self, request):
         try:

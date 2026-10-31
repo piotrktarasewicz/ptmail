@@ -30,6 +30,7 @@ from .message_view import MessageView
 ALL_KEY = "all"
 ACCOUNT_KEY = "account"
 OPENED_CACHE_SIZE = 30
+AFTER_FOCUS_SPEECH_DELAY_MS = 300
 
 
 def _newest_new_message(previous, messages):
@@ -51,6 +52,7 @@ class MainFrame(wx.Frame):
         self._folders = []
         self._messages = {}
         self._opened = {}
+        self._removed = set()
         self._pending_open = None
         self._mailbox_key = ALL_KEY
         self._composing = False
@@ -70,6 +72,7 @@ class MainFrame(wx.Frame):
 
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
         self.Bind(wx.EVT_CLOSE, self._on_close)
+        self._message_list.list.Bind(wx.EVT_CONTEXT_MENU, self._on_context_menu)
         self._update_title()
         self._show_mailbox_rows()
         self._show_view(self._message_list)
@@ -110,6 +113,7 @@ class MainFrame(wx.Frame):
         self._folders = []
         self._messages = {}
         self._opened = {}
+        self._removed = set()
         self._pending_open = None
         self._show_mailbox_rows()
         self._worker = MailWorker(account, password, self, self._dispatch)
@@ -147,8 +151,16 @@ class MainFrame(wx.Frame):
         self.SetStatusText("")
         self._show_mailbox_rows()
 
+    def on_action_failed(self, text):
+        self._say(text)
+        self._removed.clear()
+        if self._worker is not None:
+            self._worker.refresh(self._current_folder(), silent=True)
+
     def on_messages(self, folder, messages, refreshed, silent=False):
         previous = self._messages.get(folder)
+        # Pobranie mogło wyruszyć, zanim serwer dostał polecenie usunięcia.
+        messages = [m for m in messages if (folder, m.uid) not in self._removed]
         self._messages[folder] = messages
         self.SetStatusText("")
         current = folder == self._current_folder()
@@ -220,14 +232,17 @@ class MainFrame(wx.Frame):
         for index, message in enumerate(messages):
             if message.uid == uid and not message.seen:
                 messages[index] = replace(message, seen=True)
-                self._folders = [
-                    replace(f, unread=max(0, f.unread - 1)) if f.name == folder else f
-                    for f in self._folders
-                ]
-                self._show_mailbox_rows()
+                self._change_unread(folder, -1)
                 if folder == self._current_folder():
                     self._show_message_rows()
                 return
+
+    def _change_unread(self, folder, change):
+        self._folders = [
+            replace(f, unread=max(0, f.unread + change)) if f.name == folder else f
+            for f in self._folders
+        ]
+        self._show_mailbox_rows()
 
     def _update_title(self):
         self.SetTitle(f"{self._mailbox_label()} - {APP_NAME}")
@@ -301,6 +316,177 @@ class MainFrame(wx.Frame):
     def _back_to_list(self):
         self._pending_open = None
         self._show_view(self._message_list)
+
+    # Czynności na wiadomościach
+
+    def _selected_message(self):
+        uid = self._message_list.selected_key()
+        messages = self._messages.get(self._current_folder(), [])
+        return next((m for m in messages if m.uid == uid), None)
+
+    def _current_role(self):
+        folder = self._current_folder()
+        return next((f.role for f in self._folders if f.name == folder), None)
+
+    def _move_to_trash(self):
+        message = self._selected_message()
+        if message is None or self._worker is None:
+            return
+        if self._current_role() == "trash":
+            self._say(_("Wiadomość jest już w koszu"))
+            return
+        folder = self._current_folder()
+        self._remove_message(
+            message,
+            lambda client: client.move(folder, message.uid, "trash"),
+            _("Przeniesiono do kosza"),
+            _("Nie udało się przenieść do kosza"),
+            announce=False,
+        )
+
+    def _archive(self):
+        message = self._selected_message()
+        if message is None or self._worker is None:
+            return
+        folder = self._current_folder()
+        if self._account.provider.archive_by_label:
+            if folder != INBOX:
+                self._say(_("Archiwizować można tylko z Odebranych"))
+                return
+            run = lambda client: client.remove_inbox_label(message.uid)
+        elif self._current_role() == "archive":
+            self._say(_("Wiadomość jest już w archiwum"))
+            return
+        else:
+            run = lambda client: client.move(folder, message.uid, "archive")
+        self._remove_message(
+            message, run, _("Zarchiwizowano"), _("Nie udało się zarchiwizować")
+        )
+
+    def _remove_message(self, message, run, status, failure, announce=True):
+        """Usuwa wiadomość z listy od razu, a serwer dostaje polecenie w tle.
+
+        Bez announce NVDA czyta tylko następną wiadomość, co nie męczy przy
+        kasowaniu serii. Status padnie, gdy nie ma już czego czytać.
+        """
+        folder = self._current_folder()
+        messages = self._messages[folder]
+        index = messages.index(message)
+        following = None
+        if index + 1 < len(messages):
+            following = messages[index + 1]
+        elif index > 0:
+            following = messages[index - 1]
+        reading = self._message_view.IsShown()
+        del messages[index]
+        self._removed.add((folder, message.uid))
+        self._opened.pop((folder, message.uid), None)
+        if not message.seen:
+            self._change_unread(folder, -1)
+        self._show_message_rows()
+        if following is not None:
+            self._message_list.select_key(following.uid)
+        self._worker.perform(run, failure)
+        if reading:
+            # Powrót na listę czyta następną wiadomość, a komunikat przychodzi po nim.
+            self._pending_open = None
+            self._show_view(self._message_list)
+            self.SetStatusText(status)
+            if announce or following is None:
+                wx.CallLater(AFTER_FOCUS_SPEECH_DELAY_MS, speak, status)
+            return
+        self.SetStatusText(status)
+        if following is None:
+            speak(status)
+            return
+        sentence = message_sentence(following, self._row_account_name())
+        speak(f"{status}. {sentence}" if announce else sentence)
+
+    def _toggle_read(self):
+        message = self._selected_message()
+        if message is None or self._worker is None:
+            return
+        folder = self._current_folder()
+        seen = not message.seen
+        self._replace_message(message, replace(message, seen=seen))
+        self._change_unread(folder, -1 if seen else 1)
+        # Bez tego ponowne otwarcie z pamięci nie oznaczyłoby jej jako przeczytanej.
+        self._opened.pop((folder, message.uid), None)
+        self._worker.perform(
+            lambda client: client.set_flag(folder, message.uid, "\\Seen", seen),
+            _("Nie udało się zmienić stanu wiadomości"),
+        )
+        self._say(
+            _("Oznaczono jako przeczytaną")
+            if seen
+            else _("Oznaczono jako nieprzeczytaną")
+        )
+
+    def _toggle_flag(self):
+        message = self._selected_message()
+        if message is None or self._worker is None:
+            return
+        folder = self._current_folder()
+        flagged = not message.flagged
+        self._replace_message(message, replace(message, flagged=flagged))
+        self._worker.perform(
+            lambda client: client.set_flag(folder, message.uid, "\\Flagged", flagged),
+            _("Nie udało się zmienić flagi"),
+        )
+        self._say(_("Oflagowano") if flagged else _("Zdjęto flagę"))
+
+    def _replace_message(self, old, new):
+        messages = self._messages[self._current_folder()]
+        messages[messages.index(old)] = new
+        self._show_message_rows()
+
+    def _build_context_menu(self):
+        message = self._selected_message()
+        items = (
+            (_("&Otwórz\tEnter"), self._open_selected_message),
+            (_("O&dpowiedz\tCtrl+R"), lambda: self._reply(False)),
+            (_("Odpowiedz &wszystkim\tCtrl+Shift+R"), lambda: self._reply(True)),
+            (
+                _("&Przekaż dalej\tCtrl+L"),
+                lambda: self._compose_from_selected(forward_draft),
+            ),
+            None,
+            (_("Przenieś do &kosza\tDelete"), self._move_to_trash),
+            (_("&Archiwizuj\tCtrl+Shift+A"), self._archive),
+            (
+                _("Oznacz jako &nieprzeczytaną\tCtrl+U")
+                if message.seen
+                else _("Oznacz jako p&rzeczytaną\tCtrl+U"),
+                self._toggle_read,
+            ),
+            (
+                _("&Zdejmij flagę\tCtrl+Shift+F")
+                if message.flagged
+                else _("O&flaguj\tCtrl+Shift+F"),
+                self._toggle_flag,
+            ),
+            None,
+            (_("&Nowa wiadomość\tCtrl+N"), lambda: self._compose(Draft())),
+            (_("&Sprawdź pocztę teraz\tF5"), self._check_mail),
+        )
+        menu = wx.Menu()
+        for item in items:
+            if item is None:
+                menu.AppendSeparator()
+                continue
+            label, handler = item
+            entry = menu.Append(wx.ID_ANY, label)
+            menu.Bind(
+                wx.EVT_MENU, lambda _event, run=handler: run(), entry
+            )
+        return menu
+
+    def _on_context_menu(self, _event):
+        if self._selected_message() is None:
+            return
+        menu = self._build_context_menu()
+        self._message_list.list.PopupMenu(menu)
+        menu.Destroy()
 
     # Pisanie
 
@@ -414,7 +600,7 @@ class MainFrame(wx.Frame):
     # Zdarzenia
 
     def _on_key(self, event):
-        if self._on_compose_key(event):
+        if self._on_compose_key(event) or self._on_action_key(event):
             return
         if self._message_view.IsShown():
             handled = self._on_message_key(event)
@@ -436,6 +622,26 @@ class MainFrame(wx.Frame):
             self._reply(reply_all=shift)
         elif key == ord("L") and not shift:
             self._compose_from_selected(forward_draft)
+        else:
+            return False
+        return True
+
+    def _on_action_key(self, event):
+        if self._mailbox_view.IsShown():
+            return False
+        key = event.GetKeyCode()
+        control = event.ControlDown() and not event.AltDown()
+        shift = event.ShiftDown()
+        if key in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE) and not (
+            event.ControlDown() or event.AltDown() or shift
+        ):
+            self._move_to_trash()
+        elif control and shift and key == ord("A"):
+            self._archive()
+        elif control and shift and key == ord("F"):
+            self._toggle_flag()
+        elif control and not shift and key == ord("U"):
+            self._toggle_read()
         else:
             return False
         return True
