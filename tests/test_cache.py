@@ -130,6 +130,26 @@ def test_corrupted_file_is_replaced(tmp_path, monkeypatch):
     cache.close()
 
 
+def test_locked_database_is_not_deleted(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    first = open_cache()
+    first.save_messages(EMAIL, "INBOX", [message(1)])
+    first.close()
+    path = tmp_path / "PT Mail" / "cache.db"
+
+    def locked(database=":memory:"):
+        if database == ":memory:":
+            return MailCache()
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(cache_module, "MailCache", locked)
+    second = open_cache()
+    second.close()
+    reopened = MailCache(path)
+    assert reopened.messages(EMAIL)
+    reopened.close()
+
+
 def test_unusable_path_falls_back_to_memory(tmp_path, monkeypatch):
     blocked = tmp_path / "plik"
     blocked.write_text("x")
@@ -263,6 +283,29 @@ def test_fetched_message_is_stored(frame):
     assert frame.worker.opened == [("INBOX", 1)]
     frame.on_message_opened(EMAIL, "INBOX", 1, parse_message(RAW), RAW)
     assert frame._cache.body(key(1)) == RAW
+
+
+def test_opened_body_survives_refresh_and_restart(frame, tmp_path):
+    path = tmp_path / "cache.db"
+    frame._cache = MailCache(path)
+    frame._cache.save_messages(EMAIL, "INBOX", [message(1)])
+    start(frame)
+    press_enter(frame)
+    frame.on_message_opened(EMAIL, "INBOX", 1, parse_message(RAW), RAW)
+    frame.on_messages(EMAIL, "INBOX", [message(1, seen=True)], True)
+    frame._cache.close()
+    frame._cache = MailCache(path)
+    assert frame._cache.body(key(1)) == RAW
+    frame._cache.keep_accounts([EMAIL])
+    assert frame._cache.body(key(1)) == RAW
+    frame._cache.close()
+    frame._cache = MailCache()
+
+
+def test_database_errors_are_logged(cache, caplog):
+    cache.close()
+    cache.save_body(key(1), RAW)
+    assert "save_body" in caplog.text
 
 
 def test_removed_message_leaves_cache(frame):

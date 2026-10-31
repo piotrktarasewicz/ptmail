@@ -5,12 +5,14 @@ a źródłem prawdy zostaje serwer.
 """
 
 import functools
+import logging
 import sqlite3
 from datetime import datetime
 
 from .config import config_path
 from .models import Folder, Message
 
+logger = logging.getLogger(__name__)
 SCHEMA_VERSION = 1
 MAX_BODY_BYTES = 10 * 1024 * 1024
 SCHEMA = """
@@ -37,6 +39,7 @@ def _quiet(default=None):
             try:
                 return method(*args)
             except sqlite3.Error:
+                logger.exception("Błąd bazy w %s", method.__name__)
                 return default
 
         return wrapper
@@ -188,8 +191,13 @@ def open_cache():
         path.parent.mkdir(parents=True, exist_ok=True)
         try:
             return MailCache(path)
+        except sqlite3.OperationalError:
+            # Np. baza zajęta przez drugie okno programu: nie jest uszkodzona.
+            raise
         except sqlite3.DatabaseError:
+            logger.warning("Baza jest uszkodzona i powstanie od nowa")
             path.unlink(missing_ok=True)
             return MailCache(path)
     except (OSError, sqlite3.Error):
+        logger.exception("Nie udało się otworzyć bazy, działa pamięć tymczasowa")
         return MailCache()

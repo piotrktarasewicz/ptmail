@@ -5,7 +5,13 @@ import time
 from dataclasses import replace
 from datetime import date, timedelta
 
-from .imap_parser import parse_body, parse_fetch, parse_folders, parse_unread
+from .imap_parser import (
+    parse_body,
+    parse_fetch,
+    parse_folders,
+    parse_search_folders,
+    parse_unread,
+)
 
 TIMEOUT_SECONDS = 30
 INBOX = "INBOX"
@@ -15,6 +21,7 @@ IDLE_POLL_SECONDS = 5
 EXISTS_RE = re.compile(rb"\* \d+ EXISTS\b")
 CACHE_DAYS = 90
 MESSAGE_LIMIT = 200
+SEARCH_LIMIT = 100
 FETCH_ITEMS = "(UID FLAGS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
 # Skróty miesięcy z RFC 3501, bo strftime zależy od ustawień regionalnych.
 MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
@@ -92,13 +99,33 @@ class ImapClient:
         self._call(self._imap.select, quote(folder), True)
         since = since_argument(date.today() - timedelta(days=CACHE_DAYS))
         data = self._call(self._imap.uid, "SEARCH", "SINCE", since)
-        uids = data[0].split()[-MESSAGE_LIMIT:] if data and data[0] else []
+        return self._fetch_headers(data, MESSAGE_LIMIT)
+
+    def _fetch_headers(self, search_data, limit):
+        found = search_data[0] if search_data else None
+        uids = found.split()[-limit:] if found else []
         if not uids:
             return []
         data = self._call(
             self._imap.uid, "FETCH", b",".join(uids).decode("ascii"), FETCH_ITEMS
         )
         return sorted(parse_fetch(data), key=_sort_key, reverse=True)
+
+    def search(self, folder, query):
+        """Szuka na serwerze, więc obejmuje też pocztę starszą niż 90 dni.
+
+        TEXT obejmuje nadawcę, temat i treść. Zapytanie idzie jako literał, bo tylko
+        tak imaplib przepuści polskie znaki.
+        """
+        self._call(self._imap.select, quote(folder), True)
+        self._imap.literal = query.encode("utf-8")
+        data = self._call(self._imap.uid, "SEARCH", "CHARSET", "UTF-8", "TEXT")
+        return self._fetch_headers(data, SEARCH_LIMIT)
+
+    def search_everywhere(self, query):
+        """Zwraca pary (folder, wiadomości) z całego konta."""
+        folders = parse_search_folders(self._call(self._imap.list))
+        return [(folder, self.search(folder, query)) for folder in folders]
 
     def fetch_message(self, folder, uid):
         """Pobiera całą wiadomość i oznacza ją jako przeczytaną."""

@@ -1,5 +1,5 @@
 import webbrowser
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 
 import wx
 
@@ -16,7 +16,7 @@ from ..cache import MailCache, open_cache
 from ..compose import Draft, forward_draft, reply_draft
 from ..config import load_accounts, save_accounts
 from ..credentials import get_password, set_password
-from ..formatting import mailbox_sentence, message_sentence
+from ..formatting import found_text, mailbox_sentence, message_sentence
 from ..i18n import _
 from ..idle_watcher import IdleWatcher
 from ..mail_worker import INBOX, MailWorker
@@ -28,10 +28,21 @@ from .accounts_dialog import AccountsDialog
 from .compose_dialog import ComposeDialog
 from .list_view import ListView
 from .message_view import MessageView
+from .search_dialog import SearchDialog
 
 ALL_KEY = "all"
+SEARCH_KEY = "search"
 OPENED_CACHE_SIZE = 30
+SEARCH_RESULT_LIMIT = 200
 AFTER_FOCUS_SPEECH_DELAY_MS = 300
+
+
+@dataclass
+class PendingSearch:
+    search_id: int
+    waiting: set
+    messages: list = field(default_factory=list)
+    failed: list = field(default_factory=list)
 
 
 def _newest_new_message(previous, messages):
@@ -49,8 +60,8 @@ def _newest_first(message):
 class MainFrame(wx.Frame):
     """Okno główne. Zawsze widać w nim tylko jeden widok naraz.
 
-    Skrzynka to ALL_KEY albo para (adres konta, folder); folder None oznacza
-    Odebrane wybrane z wiersza konta.
+    Skrzynka to ALL_KEY, SEARCH_KEY albo para (adres konta, folder); folder None
+    oznacza Odebrane wybrane z wiersza konta.
     """
 
     def __init__(self):
@@ -69,6 +80,14 @@ class MainFrame(wx.Frame):
         self._sync_pending = set()
         self._sync_clean = True
         self._initial_load = False
+        self._search_results = []
+        self._pending_search = None
+        self._search_dialog = None
+        self._found_search = None
+        self._last_search_id = 0
+        self._before_search = None
+        self._last_query = ""
+        self._last_everywhere = False
 
         self._build_menu()
         self.CreateStatusBar()
@@ -95,6 +114,7 @@ class MainFrame(wx.Frame):
         menu = wx.Menu()
         accounts = menu.Append(wx.ID_ANY, _("&Konta…"))
         check = menu.Append(wx.ID_ANY, _("&Sprawdź pocztę teraz\tF5"))
+        search = menu.Append(wx.ID_ANY, _("S&zukaj…\tCtrl+F"))
         menu.AppendSeparator()
         close = menu.Append(wx.ID_EXIT, _("&Zakończ"))
         bar = wx.MenuBar()
@@ -102,6 +122,7 @@ class MainFrame(wx.Frame):
         self.SetMenuBar(bar)
         self.Bind(wx.EVT_MENU, lambda _event: self._manage_accounts(), accounts)
         self.Bind(wx.EVT_MENU, lambda _event: self._check_mail(), check)
+        self.Bind(wx.EVT_MENU, lambda _event: self._open_search(), search)
         self.Bind(wx.EVT_MENU, lambda _event: self.Close(), close)
 
     def _start(self):
@@ -136,11 +157,16 @@ class MainFrame(wx.Frame):
         self._opened = {}
         self._removed = set()
         self._pending_open = None
+        self._pending_search = None
+        self._search_results = []
+        if self._mailbox_key == SEARCH_KEY:
+            self._mailbox_key = self._before_search[0]
+            self._show_view(self._message_list)
         if self._mailbox_key != ALL_KEY and not any(
             account.email == self._mailbox_key[0] for account in accounts
         ):
             self._mailbox_key = ALL_KEY
-            self._update_title()
+        self._update_title()
         self._load_from_cache()
         for account in accounts:
             self._start_session(account)
@@ -184,7 +210,7 @@ class MainFrame(wx.Frame):
 
     def _target(self):
         """Zwraca (adres, folder) wybranej skrzynki albo None dla Wszystkich skrzynek."""
-        if self._mailbox_key == ALL_KEY:
+        if self._mailbox_key in (ALL_KEY, SEARCH_KEY):
             return None
         email, folder = self._mailbox_key
         return email, folder or INBOX
@@ -194,10 +220,14 @@ class MainFrame(wx.Frame):
         return target[1] if target and target[0] == email else INBOX
 
     def _is_visible(self, email, folder):
+        if self._mailbox_key == SEARCH_KEY:
+            return False
         target = self._target()
         return folder == INBOX if target is None else target == (email, folder)
 
     def _visible_messages(self):
+        if self._mailbox_key == SEARCH_KEY:
+            return self._search_results
         target = self._target()
         if target is not None:
             return self._messages.get(target, [])
@@ -283,8 +313,12 @@ class MainFrame(wx.Frame):
             play(SYNCED)
 
     def _go_to_new_message(self, message):
-        # Nie przerywamy czytania wiadomości ani pisania.
-        if not self._message_list.IsShown() or self._composing:
+        # Nie przerywamy czytania wiadomości, pisania ani szukania.
+        if (
+            not self._message_list.IsShown()
+            or self._composing
+            or self._search_dialog is not None
+        ):
             return
         self._message_list.select_key(message.key)
         if self.IsActive():
@@ -319,10 +353,26 @@ class MainFrame(wx.Frame):
     def on_outgoing_done(self, _email, on_done, success, text):
         on_done(success, text)
 
+    def on_search_done(self, email, search_id, results):
+        search = self._pending_search
+        if search is None or search.search_id != search_id:
+            return
+        search.waiting.discard(email)
+        if results is None:
+            search.failed.append(self._account_for(email).name)
+        else:
+            for folder, messages in results:
+                search.messages += [
+                    replace(m, account=email, folder=folder) for m in messages
+                ]
+        if not search.waiting:
+            self._pending_search = None
+            self._finish_search(search)
+
     # Widoki
 
     def _row_account_name(self, message):
-        if self._mailbox_key != ALL_KEY:
+        if self._mailbox_key not in (ALL_KEY, SEARCH_KEY):
             return None
         return self._account_for(message.account).name
 
@@ -351,16 +401,26 @@ class MainFrame(wx.Frame):
             ]
         self._mailbox_view.set_rows(rows)
 
+    def _message_lists(self, key):
+        """Listy z tą wiadomością: jej folder i wyniki wyszukiwania."""
+        email, folder, _uid = key
+        lists = [self._messages.get((email, folder), []), self._search_results]
+        return [items for items in lists if any(m.key == key for m in items)]
+
+    def _store_message(self, message):
+        for items in self._message_lists(message.key):
+            items[[m.key for m in items].index(message.key)] = message
+        self._cache.update_flags(message)
+
     def _mark_seen(self, key):
-        email, folder, uid = key
-        messages = self._messages.get((email, folder), [])
-        for index, message in enumerate(messages):
-            if message.uid == uid and not message.seen:
-                messages[index] = replace(message, seen=True)
-                self._cache.update_flags(messages[index])
-                self._change_unread(email, folder, -1)
-                self._show_message_rows()
-                return
+        lists = self._message_lists(key)
+        if not lists:
+            return
+        message = next(m for m in lists[0] if m.key == key)
+        if not message.seen:
+            self._store_message(replace(message, seen=True))
+            self._change_unread(message.account, message.folder, -1)
+            self._show_message_rows()
 
     def _change_unread(self, email, folder, change):
         self._folders[email] = [
@@ -376,6 +436,8 @@ class MainFrame(wx.Frame):
     def _mailbox_label(self):
         if self._mailbox_key == ALL_KEY:
             return _("Wszystkie skrzynki")
+        if self._mailbox_key == SEARCH_KEY:
+            return _("Wyniki wyszukiwania")
         email, folder = self._mailbox_key
         name = self._account_for(email).name
         if folder is None:
@@ -393,6 +455,7 @@ class MainFrame(wx.Frame):
 
     def _go_to_mailboxes(self):
         self._pending_open = None
+        self._pending_search = None
         self._mailbox_view.select_key(self._mailbox_key)
         self._show_view(self._mailbox_view)
 
@@ -400,6 +463,7 @@ class MainFrame(wx.Frame):
         key = self._mailbox_view.selected_key()
         if key is None:
             return
+        self._pending_search = None
         if key != self._mailbox_key:
             self._mailbox_key = key
             self._message_list.set_rows([])
@@ -447,6 +511,7 @@ class MainFrame(wx.Frame):
         )
 
     def _show_message(self, content):
+        self._pending_search = None
         self._message_view.show_content(content)
         self._show_view(self._message_view)
 
@@ -466,6 +531,92 @@ class MainFrame(wx.Frame):
     def _back_to_list(self):
         self._pending_open = None
         self._show_view(self._message_list)
+
+    # Wyszukiwanie
+
+    def _open_search(self):
+        if not self._workers:
+            self._say(_("Najpierw dodaj konto"))
+            return
+        with SearchDialog(
+            self, self._last_query, self._last_everywhere, self._start_search
+        ) as dialog:
+            self._search_dialog = dialog
+            dialog.ShowModal()
+            self._search_dialog = None
+        # Zamknięcie okna Escape'em przerywa szukanie.
+        self._pending_search = None
+        if self._found_search is not None:
+            found, parts = self._found_search
+            self._found_search = None
+            self._show_search_results(found, parts)
+
+    def _start_search(self, query, everywhere):
+        self._last_query = query
+        self._last_everywhere = everywhere
+        target = self._target()
+        if self._mailbox_key == SEARCH_KEY:
+            target = self._before_target()
+        emails = [target[0]] if target and not everywhere else list(self._workers)
+        self._last_search_id += 1
+        self._pending_search = PendingSearch(self._last_search_id, set(emails))
+        self._say(_("Wyszukiwanie"))
+        for email in emails:
+            if everywhere:
+                folder = None
+            else:
+                folder = target[1] if target else INBOX
+            self._workers[email].search(self._last_search_id, query, folder)
+
+    def _before_target(self):
+        key = self._before_search[0]
+        return None if key == ALL_KEY else (key[0], key[1] or INBOX)
+
+    def _finish_search(self, search):
+        found = sorted(search.messages, key=_newest_first, reverse=True)
+        found = found[:SEARCH_RESULT_LIMIT]
+        parts = []
+        if search.failed:
+            names = ", ".join(search.failed)
+            parts.append(_("Nie przeszukano: {names}").format(names=names))
+        dialog = self._search_dialog
+        if not found:
+            parts.append(_("Nic nie znaleziono"))
+            text = ". ".join(parts)
+            if dialog is not None:
+                dialog.show_message(text)
+            self._say(text)
+        elif dialog is not None:
+            self._found_search = (found, parts)
+            dialog.EndModal(wx.ID_OK)
+        else:
+            self._show_search_results(found, parts)
+
+    def _show_search_results(self, found, parts):
+        if self._mailbox_key != SEARCH_KEY:
+            view = self._mailbox_view if self._mailbox_view.IsShown() else None
+            selected = self._message_list.selected_key()
+            self._before_search = (self._mailbox_key, selected, view)
+        self._mailbox_key = SEARCH_KEY
+        self._search_results = found
+        self._update_title()
+        self._show_message_rows()
+        self._select_top_message()
+        self._show_view(self._message_list)
+        parts.append(found_text(len(found)))
+        parts.append(message_sentence(found[0], self._row_account_name(found[0])))
+        self.SetStatusText(parts[-2])
+        wx.CallLater(AFTER_FOCUS_SPEECH_DELAY_MS, speak, ". ".join(parts))
+
+    def _leave_search(self):
+        """Escape wraca tam, skąd weszło się do wyszukiwania."""
+        mailbox, selected, view = self._before_search
+        self._mailbox_key = mailbox
+        self._search_results = []
+        self._update_title()
+        self._show_message_rows()
+        self._message_list.select_key(selected)
+        self._show_view(view or self._message_list)
 
     # Czynności na wiadomościach
 
@@ -530,7 +681,8 @@ class MainFrame(wx.Frame):
         elif index > 0:
             following = visible[index - 1]
         reading = self._message_view.IsShown()
-        self._messages[(message.account, message.folder)].remove(message)
+        for items in self._message_lists(message.key):
+            items[:] = [m for m in items if m.key != message.key]
         self._removed.add(message.key)
         self._opened.pop(message.key, None)
         self._cache.delete_message(message.key)
@@ -560,7 +712,8 @@ class MainFrame(wx.Frame):
         if message is None:
             return
         seen = not message.seen
-        self._replace_message(message, replace(message, seen=seen))
+        self._store_message(replace(message, seen=seen))
+        self._show_message_rows()
         self._change_unread(message.account, message.folder, -1 if seen else 1)
         self._workers[message.account].perform(
             lambda client: client.set_flag(message.folder, message.uid, "\\Seen", seen),
@@ -577,7 +730,8 @@ class MainFrame(wx.Frame):
         if message is None:
             return
         flagged = not message.flagged
-        self._replace_message(message, replace(message, flagged=flagged))
+        self._store_message(replace(message, flagged=flagged))
+        self._show_message_rows()
         self._workers[message.account].perform(
             lambda client: client.set_flag(
                 message.folder, message.uid, "\\Flagged", flagged
@@ -585,12 +739,6 @@ class MainFrame(wx.Frame):
             _("Nie udało się zmienić flagi"),
         )
         self._say(_("Oflagowano") if flagged else _("Zdjęto flagę"))
-
-    def _replace_message(self, old, new):
-        messages = self._messages[(old.account, old.folder)]
-        messages[messages.index(old)] = new
-        self._cache.update_flags(new)
-        self._show_message_rows()
 
     def _build_context_menu(self):
         message = self._selected_message()
@@ -616,6 +764,7 @@ class MainFrame(wx.Frame):
             ),
             None,
             (_("&Nowa wiadomość\tCtrl+N"), self._new_message),
+            (_("S&zukaj\tCtrl+F"), self._open_search),
             (_("&Sprawdź pocztę teraz\tF5"), self._check_mail),
         )
         menu = wx.Menu()
@@ -644,6 +793,7 @@ class MainFrame(wx.Frame):
             return
         focused = wx.Window.FindFocus()
         self._composing = True
+        self._pending_search = None
         with ComposeDialog(self, accounts, draft, self._workers) as dialog:
             dialog.ShowModal()
             result = dialog.result_text
@@ -774,6 +924,8 @@ class MainFrame(wx.Frame):
         shift = event.ShiftDown()
         if key == ord("N") and not shift:
             self._new_message()
+        elif key == ord("F") and not shift and not self._message_view.IsShown():
+            self._open_search()
         elif self._mailbox_view.IsShown():
             return False
         elif key == ord("R"):
@@ -807,7 +959,10 @@ class MainFrame(wx.Frame):
     def _on_list_key(self, event):
         key = event.GetKeyCode()
         if key == wx.WXK_ESCAPE and self._message_list.IsShown():
-            self._go_to_mailboxes()
+            if self._mailbox_key == SEARCH_KEY:
+                self._leave_search()
+            else:
+                self._go_to_mailboxes()
         elif key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
             if self._mailbox_view.IsShown():
                 self._open_selected_mailbox()

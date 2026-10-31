@@ -44,6 +44,7 @@ ROLE_NAMES = {
 }
 # \All i \Important to gmailowe Wszystkie wiadomości i Ważne, które dublują skrzynkę.
 SKIPPED_FLAGS = {b"\\noselect", b"\\nonexistent", b"\\all", b"\\important"}
+SKIPPED_SEARCH_ROLES = {"trash", "junk"}
 GMAIL_PREFIX = "[Gmail]/"
 
 
@@ -63,6 +64,17 @@ def decode_mutf7(value):
 
 def parse_list_item(item):
     """Zamienia wiersz odpowiedzi LIST na Folder albo None, gdy folder pomijamy."""
+    fields = _list_fields(item)
+    if fields is None:
+        return None
+    flags, name = fields
+    if flags & SKIPPED_FLAGS:
+        return None
+    role = _folder_role(name, flags)
+    return Folder(name, _folder_label(name, role), role)
+
+
+def _list_fields(item):
     if isinstance(item, tuple):
         line = item[0].rsplit(b"{", 1)[0] + _quoted(item[1])
     else:
@@ -71,16 +83,29 @@ def parse_list_item(item):
     if match is None:
         return None
     flags = {flag.lower() for flag in match["flags"].split()}
-    if flags & SKIPPED_FLAGS:
-        return None
-    name = _unquote(match["name"]).decode("ascii", "replace")
-    role = _folder_role(name, flags)
-    return Folder(name, _folder_label(name, role), role)
+    return flags, _unquote(match["name"]).decode("ascii", "replace")
 
 
 def parse_folders(data):
     folders = [parse_list_item(item) for item in data if item]
     return sort_folders([folder for folder in folders if folder is not None])
+
+
+def parse_search_folders(data):
+    """Zwraca foldery do przeszukania całego konta.
+
+    Gmail ma folder z całą pocztą, także zarchiwizowaną. Na liście folderów go
+    pomijamy, ale do wyszukiwania jest najlepszy i wystarczy sam jeden.
+    """
+    for item in data:
+        fields = _list_fields(item) if item else None
+        if fields is not None and b"\\all" in fields[0]:
+            return [fields[1]]
+    return [
+        folder.name
+        for folder in parse_folders(data)
+        if folder.role not in SKIPPED_SEARCH_ROLES
+    ]
 
 
 def sort_folders(folders):

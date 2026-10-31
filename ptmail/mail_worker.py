@@ -26,6 +26,13 @@ class OpenMessage:
 
 
 @dataclass(frozen=True)
+class Search:
+    search_id: int
+    query: str
+    folder: str | None  # None to całe konto
+
+
+@dataclass(frozen=True)
 class MessageAction:
     run: Callable[[ImapClient], None]
     failure_text: str
@@ -64,6 +71,9 @@ class MailWorker(threading.Thread):
     def refresh(self, folder, silent=False):
         self._requests.put(Request(folder, with_folders=True, silent=silent))
 
+    def search(self, search_id, query, folder=None):
+        self._requests.put(Search(search_id, query, folder))
+
     def perform(self, run, failure_text):
         """Zleca czynność na wiadomości. Okno pokazało już jej skutek."""
         self._requests.put(MessageAction(run, failure_text))
@@ -101,6 +111,8 @@ class MailWorker(threading.Thread):
                 self._open_message(request)
             elif isinstance(request, MessageAction):
                 self._perform(request)
+            elif isinstance(request, Search):
+                self._search(request)
             elif isinstance(request, SendMail):
                 self._send(request)
             elif isinstance(request, SaveDraft):
@@ -164,6 +176,22 @@ class MailWorker(threading.Thread):
             parse_message(raw),
             raw,
         )
+
+    def _search(self, request):
+        try:
+            if request.folder is None:
+                results = self._with_client(
+                    self._client.search_everywhere, request.query
+                )
+            else:
+                messages = self._with_client(
+                    self._client.search, request.folder, request.query
+                )
+                results = [(request.folder, messages)]
+        except ImapError:
+            self._client.close()
+            results = None
+        self._emit(self._listener.on_search_done, request.search_id, results)
 
     def _perform(self, request):
         try:

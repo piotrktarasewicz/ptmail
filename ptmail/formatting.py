@@ -22,6 +22,15 @@ def unread_text(count):
     )
 
 
+def found_text(count):
+    return plural(
+        count,
+        "Znaleziono {count} wiadomość",
+        "Znaleziono {count} wiadomości",
+        "Znaleziono {count} wiadomości",
+    )
+
+
 def attachments_text(count):
     return plural(count, "{count} załącznik", "{count} załączniki", "{count} załączników")
 
