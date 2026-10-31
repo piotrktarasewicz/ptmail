@@ -126,6 +126,7 @@ Okno pisania ma pola w stałej kolejności Tab: **Od, Do, DW, Temat, Treść, Za
 - **Od:** lista rozwijana z kontami. Przy odpowiedzi i przekazaniu PT Mail sam wybiera konto, na które przyszła wiadomość. Przy nowej wiadomości pierwsze konto na liście w oknie Konta.
   Adresat widzi imię i nazwisko podane przy koncie w oknie Konta, a gdy pole jest puste, sam adres.
 - **Do / DW:** zwykłe pola tekstowe, adresy rozdzielone przecinkiem. Podpowiadanie adresów z wysłanej poczty to etap 2.
+- **Podpis:** ustawiany przy koncie w oknie Konta. Staje pod treścią, a nad cytatem, po linii „-- ”. Zmiana konta w polu Od zmienia też podpis.
 - **Treść:** czysty tekst. Przy odpowiedzi cytat oryginału poniżej, poprzedzony linią „W dniu…, … napisał(a):”.
 - **Załączniki:** Ctrl+Shift+A otwiera systemowe okno wyboru plików; lista dołączonych plików pod treścią, Delete usuwa plik z listy.
 - **Wysyłanie:** Ctrl+Enter. NVDA mówi „Wysłano” i okno się zamyka.
@@ -165,7 +166,7 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 - [x] Wyszukiwanie (Ctrl+F) w bieżącej skrzynce i we wszystkich; zawsze na serwerze, więc obejmuje też pocztę starszą niż 90 dni. „We wszystkich” pomija Kosz i Spam. Okno wyszukiwania zostaje otwarte do końca szukania: NVDA mówi „Wyszukiwanie”, Escape przerywa, a przy braku wyników można od razu poprawić zapytanie. Wyniki pokazuje lista wiadomości, a Escape wraca tam, skąd się przyszło
 - [ ] Podpowiadanie adresów z wysłanej poczty
 - [ ] Przenoszenie do folderu
-- [ ] Podpis per konto
+- [x] Podpis per konto
 - [ ] Powiadomienia o nowej poczcie
 
 **Celowo pomijamy:** kalendarz, kontakty, zadania, widok HTML, grupowanie w wątki, filtry i reguły, szyfrowanie, motywy wyglądu.

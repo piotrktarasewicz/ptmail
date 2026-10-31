@@ -44,6 +44,10 @@ class AccountDialog(wx.Dialog):
         self._password = add_field(
             _("Hasło aplikacji:"), lambda: wx.TextCtrl(self, style=wx.TE_PASSWORD)
         )
+        self._signature = add_field(
+            _("Podpis:"),
+            lambda: wx.TextCtrl(self, size=(-1, 70), style=wx.TE_MULTILINE),
+        )
         self._status = add_field(
             _("Stan:"), lambda: wx.TextCtrl(self, style=wx.TE_READONLY)
         )
@@ -52,6 +56,7 @@ class AccountDialog(wx.Dialog):
             self._name.SetValue(account.name)
             self._display_name.SetValue(account.display_name)
             self._email.SetValue(account.email)
+            self._signature.SetValue(account.signature)
 
         self._ok = wx.Button(self, wx.ID_OK, _("Zapisz"))
         self._ok.SetDefault()
@@ -88,7 +93,8 @@ class AccountDialog(wx.Dialog):
             return
         name = self._name.GetValue().strip() or PROVIDERS[provider_key].label
         display_name = " ".join(self._display_name.GetValue().split())
-        account = Account(name, email, provider_key, display_name)
+        signature = self._signature.GetValue().strip()
+        account = Account(name, email, provider_key, display_name, signature)
         self._ok.Disable()
         self._status.SetValue(_("Sprawdzam połączenie"))
         threading.Thread(

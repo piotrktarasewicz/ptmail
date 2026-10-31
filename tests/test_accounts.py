@@ -348,6 +348,43 @@ def test_compose_sends_name_of_selected_account(frame):
     dialog.Destroy()
 
 
+def test_compose_shows_signature_without_counting_as_change(frame):
+    signed = Account("iCloud", ICLOUD.email, "icloud", "", "Jan\nFirma")
+    dialog = cd.ComposeDialog(frame, [signed], Draft(), frame._workers)
+    assert dialog._body.GetValue() == "\n\n-- \nJan\nFirma"
+    assert not dialog._is_changed()
+    dialog.Destroy()
+
+
+def test_changing_sender_changes_signature(frame):
+    first = Account("A", GMAIL.email, "gmail", "", "Prywatny")
+    second = Account("B", ICLOUD.email, "icloud", "", "Służbowy")
+    dialog = cd.ComposeDialog(
+        frame, [first, second], Draft(body="\n\nW dniu x:\n> y"), frame._workers
+    )
+    dialog._body.SetValue("Treść" + dialog._body.GetValue())
+    dialog._sender.SetSelection(1)
+    dialog._on_sender_changed()
+    assert dialog._body.GetValue() == "Treść\n\n-- \nSłużbowy\n\nW dniu x:\n> y"
+    dialog.Destroy()
+
+
+def test_account_dialog_keeps_multiline_signature(app):
+    parent = wx.Frame(None)
+    signed = Account("iCloud", ICLOUD.email, "icloud", "", "Jan\nFirma")
+    dialog = AccountDialog(parent, signed)
+    assert dialog._signature.GetValue() == "Jan\nFirma"
+    dialog.Destroy()
+    parent.Destroy()
+
+
+def test_signature_survives_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    signed = Account("iCloud", ICLOUD.email, "icloud", "Jan", "Jan\nFirma")
+    config.save_accounts([signed])
+    assert config.load_accounts() == [signed]
+
+
 def test_passwords_never_reach_config(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path))
     config.save_accounts(ACCOUNTS)

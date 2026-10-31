@@ -2,7 +2,13 @@ from dataclasses import replace
 
 import wx
 
-from ..compose import attachment_from_file, build_message, parse_recipients
+from ..compose import (
+    add_signature,
+    attachment_from_file,
+    build_message,
+    parse_recipients,
+    swap_signature,
+)
 from ..formatting import attachment_sentence
 from ..i18n import _
 from ..speech import speak
@@ -25,7 +31,12 @@ class ComposeDialog(wx.Dialog):
         self._accounts = accounts
         emails = [account.email for account in accounts]
         sender = emails.index(draft.sender) if draft.sender in emails else 0
-        self._draft = replace(draft, sender=emails[sender])
+        self._base_body = draft.body
+        self._signature = accounts[sender].signature
+        self._draft = add_signature(
+            replace(draft, sender=emails[sender]), self._signature
+        )
+        draft = self._draft
         self._workers = workers
         self._attachments = list(draft.attachments)
         self._busy = False
@@ -71,6 +82,7 @@ class ComposeDialog(wx.Dialog):
         sizer.Add(self._status, 0, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(sizer)
 
+        self._sender.Bind(wx.EVT_CHOICE, lambda _event: self._on_sender_changed())
         self._send_button.Bind(wx.EVT_BUTTON, lambda _event: self.send())
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
         self.Bind(wx.EVT_CLOSE, lambda _event: self.cancel())
@@ -96,6 +108,19 @@ class ComposeDialog(wx.Dialog):
 
     def _sender_account(self):
         return self._accounts[self._sender.GetSelection()]
+
+    def _on_sender_changed(self):
+        signature = self._sender_account().signature
+        if signature != self._signature:
+            self._body.SetValue(
+                swap_signature(
+                    self._body.GetValue(),
+                    self._signature,
+                    signature,
+                    self._base_body,
+                )
+            )
+            self._signature = signature
 
     def _current_draft(self):
         return replace(

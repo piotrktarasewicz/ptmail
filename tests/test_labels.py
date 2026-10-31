@@ -58,6 +58,7 @@ def test_account_fields_have_labels(frame):
         "Imię i nazwisko:",
         "Adres e-mail:",
         "Hasło aplikacji:",
+        "Podpis:",
         "Stan:",
     ]
     dialog.Destroy()

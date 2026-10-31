@@ -2,7 +2,7 @@
 
 import mimetypes
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from email.message import EmailMessage
 from email.policy import SMTP
 from email.utils import formataddr, formatdate, getaddresses, make_msgid
@@ -112,6 +112,33 @@ def forward_draft(content, own_email):
         body=f"\n\n{header}\n\n{content.body}",
         attachments=content.attachments,
     )
+
+
+def _signature_block(signature):
+    # Linia „-- ” to standardowy znak podpisu, po którym programy pocztowe go rozpoznają.
+    return f"-- \n{signature}" if signature else ""
+
+
+def add_signature(draft, signature):
+    """Wstawia podpis nad cytatem, żeby stał tuż pod pisaną treścią."""
+    if not signature:
+        return draft
+    return replace(draft, body=f"\n\n{_signature_block(signature)}{draft.body}")
+
+
+def swap_signature(text, old, new, base):
+    """Zmienia podpis po wyborze innego konta. base to treść pod podpisem, np. cytat."""
+    old_block = _signature_block(old)
+    new_block = _signature_block(new)
+    if old_block and old_block in text:
+        if new_block:
+            return text.replace(old_block, new_block, 1)
+        return text.replace(f"\n\n{old_block}", "", 1)
+    if not new_block:
+        return text
+    if base and text.endswith(base):
+        return f"{text[:-len(base)]}\n\n{new_block}{base}"
+    return f"{text.rstrip()}\n\n{new_block}"
 
 
 def parse_recipients(text):

@@ -5,10 +5,12 @@ from email.policy import default
 from ptmail.accounts import Account
 from ptmail.compose import (
     Draft,
+    add_signature,
     build_message,
     forward_draft,
     parse_recipients,
     reply_draft,
+    swap_signature,
 )
 from ptmail.message_parser import parse_message
 from ptmail.models import Attachment, MessageContent
@@ -92,6 +94,59 @@ def test_forward_keeps_attachments_and_leaves_recipient_empty():
     assert not draft.focus_body
     assert "Od: Jan Kowalski <jan@example.com>" in draft.body
     assert draft.body.endswith("Dzień dobry\n\nPozdrawiam")
+
+
+def test_signature_on_new_message():
+    assert add_signature(Draft(), "Jan\nFirma").body == "\n\n-- \nJan\nFirma"
+
+
+def test_no_signature_leaves_draft_unchanged():
+    draft = Draft(body="x")
+    assert add_signature(draft, "") is draft
+
+
+def test_signature_stands_above_quote():
+    draft = add_signature(reply_draft(original(), ME), "Jan")
+    assert draft.body.startswith("\n\n-- \nJan\n\nW dniu ")
+    assert draft.body.endswith("> Pozdrawiam")
+
+
+def test_swap_replaces_signature_and_keeps_typed_text():
+    quote = "\n\nW dniu x:\n> y"
+    text = f"Moja treść\n\n-- \nJan\n{quote}"
+    assert (
+        swap_signature(text, "Jan", "Firma", quote)
+        == f"Moja treść\n\n-- \nFirma\n{quote}"
+    )
+
+
+def test_swap_to_account_with_signature_goes_above_quote():
+    quote = "\n\nW dniu x:\n> y"
+    assert (
+        swap_signature(f"Treść{quote}", "", "Jan", quote)
+        == f"Treść\n\n-- \nJan{quote}"
+    )
+
+
+def test_swap_on_new_message_appends():
+    assert swap_signature("Treść\n", "", "Jan", "") == "Treść\n\n-- \nJan"
+
+
+def test_swap_after_user_edited_signature_does_not_duplicate_old_text():
+    assert swap_signature("Treść\n\n-- \nJan zmieniony", "Inny", "", "") == (
+        "Treść\n\n-- \nJan zmieniony"
+    )
+
+
+def test_swap_to_no_signature_removes_block():
+    assert swap_signature("Treść\n\n-- \nJan", "Jan", "", "") == "Treść"
+    quote = "\n\nW dniu x:\n> y"
+    assert swap_signature(f"\n\n-- \nJan{quote}", "Jan", "", quote) == quote
+
+
+def test_signature_reaches_recipient():
+    draft = add_signature(Draft(body=""), "Paweł Żółć")
+    assert parse_message(build_message(ACCOUNT, draft)).body.endswith("Paweł Żółć")
 
 
 def test_parse_recipients():
