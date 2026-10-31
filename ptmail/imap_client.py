@@ -144,7 +144,9 @@ class ImapClient:
 
     def move(self, folder, uid, role):
         """Przenosi wiadomość do folderu o danej roli, np. Kosz lub Archiwum."""
-        target = self._folder_for_role(role)
+        self.move_to_folder(folder, uid, self._folder_for_role(role))
+
+    def move_to_folder(self, folder, uid, target):
         self._call(self._imap.select, quote(folder), False)
         self._call(self._imap.uid, "MOVE", str(uid), quote(target))
 

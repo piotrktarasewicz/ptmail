@@ -70,6 +70,7 @@ Czynności na zaznaczonej wiadomości (odpowiednik pokrętła czynności VoiceOv
 | Ctrl+L | przekaż dalej |
 | Delete | przenieś do kosza |
 | Ctrl+Shift+A | archiwizuj |
+| Ctrl+M | przenieś do folderu |
 | Ctrl+U | przełącz przeczytana / nieprzeczytana |
 | Ctrl+Shift+F | oflaguj / zdejmij flagę |
 | Ctrl+N | nowa wiadomość |
@@ -78,7 +79,7 @@ Czynności na zaznaczonej wiadomości (odpowiednik pokrętła czynności VoiceOv
 
 Klawisz aplikacji (lub Shift+F10) otwiera menu z tymi samymi czynnościami, a przy każdej pozycji jest jej skrót. Po usunięciu lub archiwizacji fokus przechodzi na następną wiadomość i NVDA od razu ją czyta; gdy starszej nie ma, na poprzednią.
 
-Delete, Ctrl+Shift+A, Ctrl+U i Ctrl+Shift+F działają też w widoku wiadomości. Usunięcie lub archiwizacja wraca wtedy na listę, na następną wiadomość.
+Delete, Ctrl+Shift+A, Ctrl+M, Ctrl+U i Ctrl+Shift+F działają też w widoku wiadomości. Usunięcie, archiwizacja lub przeniesienie wraca wtedy na listę, na następną wiadomość.
 
 Po Delete NVDA czyta od razu następną wiadomość, bez komunikatu „Przeniesiono do kosza”, który przy kasowaniu serii męczy. Komunikat pada tylko wtedy, gdy lista została pusta, a na pasku stanu jest zawsze.
 
@@ -165,7 +166,7 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 
 - [x] Wyszukiwanie (Ctrl+F) w bieżącej skrzynce i we wszystkich; zawsze na serwerze, więc obejmuje też pocztę starszą niż 90 dni. „We wszystkich” pomija Kosz i Spam. Okno wyszukiwania zostaje otwarte do końca szukania: NVDA mówi „Wyszukiwanie”, Escape przerywa, a przy braku wyników można od razu poprawić zapytanie. Wyniki pokazuje lista wiadomości, a Escape wraca tam, skąd się przyszło
 - [ ] Podpowiadanie adresów z wysłanej poczty
-- [ ] Przenoszenie do folderu
+- [x] Przenoszenie do folderu
 - [x] Podpis per konto
 - [ ] Powiadomienia o nowej poczcie
 

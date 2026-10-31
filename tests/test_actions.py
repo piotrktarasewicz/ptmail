@@ -208,6 +208,71 @@ def test_archive_on_gmail_only_from_inbox(frame):
     assert frame.spoken == ["Archiwizować można tylko z Odebranych"]
 
 
+def choose(monkeypatch, label, answer=wx.ID_OK):
+    offered = []
+
+    def show(dialog):
+        offered.extend(f.label for f in dialog._folders)
+        dialog._list.SetStringSelection(label)
+        return answer
+
+    monkeypatch.setattr(mf.MoveDialog, "ShowModal", show)
+    return offered
+
+
+def test_move_offers_other_folders_and_moves(frame, monkeypatch):
+    offered = choose(monkeypatch, "Archiwum")
+    key(frame, ord("M"), ctrl=True)
+    assert offered == ["Kosz", "Archiwum"]
+    assert frame.worker.client.calls == [("move_to_folder", "INBOX", 3, "Archive")]
+    assert uids(frame) == [2, 1]
+    assert frame._message_list.selected_key() == ref(2)
+    assert frame.spoken == ["Przeniesiono do: Archiwum. Jan, temat 2, iCloud"]
+
+
+def test_move_updates_unread_on_both_folders(frame, monkeypatch):
+    choose(monkeypatch, "Archiwum")
+    key(frame, ord("M"), ctrl=True)
+    counts = {f.name: f.unread for f in frame._folders[EMAIL]}
+    assert counts == {"INBOX": 1, "Deleted Messages": 0, "Archive": 1}
+
+
+def test_move_cancel_does_nothing(frame, monkeypatch):
+    choose(monkeypatch, "Archiwum", wx.ID_CANCEL)
+    key(frame, ord("M"), ctrl=True)
+    assert frame.worker.client.calls == []
+    assert uids(frame) == [3, 2, 1]
+
+
+def test_move_from_message_view_returns_to_list(frame, monkeypatch):
+    choose(monkeypatch, "Kosz")
+    frame._show_message(content())
+    key(frame, ord("M"), ctrl=True)
+    assert frame._message_list.IsShown()
+    assert frame.delayed == [("Przeniesiono do: Kosz",)]
+
+
+def test_move_without_other_folders_says_so(frame):
+    frame._folders[EMAIL] = [FOLDERS[0]]
+    key(frame, ord("M"), ctrl=True)
+    assert frame.spoken == ["Nie ma innego folderu"]
+
+
+def test_move_dialog_enter_confirms_and_gives_folder(app):
+    parent = wx.Frame(None)
+    dialog = mf.MoveDialog(parent, FOLDERS)
+    dialog._list.SetSelection(2)
+    assert dialog.folder == FOLDERS[2]
+    closed = []
+    dialog.EndModal = closed.append
+    enter = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+    enter.SetKeyCode(wx.WXK_RETURN)
+    dialog._on_key(enter)
+    assert closed == [wx.ID_OK]
+    dialog.Destroy()
+    parent.Destroy()
+
+
 def test_right_alt_does_not_trigger_actions(frame):
     key(frame, ord("A"), ctrl=True, shift=True, alt=True)
     key(frame, ord("U"), ctrl=True, alt=True)

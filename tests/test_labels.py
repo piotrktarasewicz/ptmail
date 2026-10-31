@@ -8,11 +8,13 @@ import wx
 
 from ptmail.accounts import Account
 from ptmail.compose import Draft
+from ptmail.models import Folder
 from ptmail.ui.account_dialog import AccountDialog
 from ptmail.ui.accounts_dialog import AccountsDialog
 from ptmail.ui.compose_dialog import ComposeDialog
 from ptmail.ui.list_view import ListView
 from ptmail.ui.message_view import MessageView
+from ptmail.ui.move_dialog import MoveDialog
 
 GW_HWNDPREV = 3
 FIELD_TYPES = (wx.TextCtrl, wx.Choice, wx.ListBox)
@@ -67,6 +69,12 @@ def test_account_fields_have_labels(frame):
 def test_accounts_list_has_label(frame):
     dialog = AccountsDialog(frame, [ACCOUNT])
     assert field_labels(dialog) == ["Konta:"]
+    dialog.Destroy()
+
+
+def test_move_list_has_label(frame):
+    dialog = MoveDialog(frame, [Folder("A", "Rachunki")])
+    assert field_labels(dialog) == ["Folder:"]
     dialog.Destroy()
 
 

@@ -28,6 +28,7 @@ from .accounts_dialog import AccountsDialog
 from .compose_dialog import ComposeDialog
 from .list_view import ListView
 from .message_view import MessageView
+from .move_dialog import MoveDialog
 from .search_dialog import SearchDialog
 
 ALL_KEY = "all"
@@ -673,6 +674,32 @@ class MainFrame(wx.Frame):
             message, run, _("Zarchiwizowano"), _("Nie udało się zarchiwizować")
         )
 
+    def _choose_folder(self):
+        message = self._selected_with_worker()
+        if message is None:
+            return
+        folders = [
+            f for f in self._folders.get(message.account, [])
+            if f.name != message.folder
+        ]
+        if not folders:
+            self._say(_("Nie ma innego folderu"))
+            return
+        with MoveDialog(self, folders) as dialog:
+            if dialog.ShowModal() != wx.ID_OK:
+                return
+            target = dialog.folder
+        self._remove_message(
+            message,
+            lambda client: client.move_to_folder(
+                message.folder, message.uid, target.name
+            ),
+            _("Przeniesiono do: {folder}").format(folder=target.label),
+            _("Nie udało się przenieść wiadomości"),
+        )
+        if not message.seen:
+            self._change_unread(message.account, target.name, 1)
+
     def _remove_message(self, message, run, status, failure, announce=True):
         """Usuwa wiadomość z listy od razu, a serwer dostaje polecenie w tle.
 
@@ -756,6 +783,7 @@ class MainFrame(wx.Frame):
             None,
             (_("Przenieś do &kosza\tDelete"), self._move_to_trash),
             (_("&Archiwizuj\tCtrl+Shift+A"), self._archive),
+            (_("Prz&enieś do folderu…\tCtrl+M"), self._choose_folder),
             (
                 _("Oznacz jako &nieprzeczytaną\tCtrl+U")
                 if message.seen
@@ -954,6 +982,8 @@ class MainFrame(wx.Frame):
             self._move_to_trash()
         elif control and shift and key == ord("A"):
             self._archive()
+        elif control and not shift and key == ord("M"):
+            self._choose_folder()
         elif control and shift and key == ord("F"):
             self._toggle_flag()
         elif control and not shift and key == ord("U"):
