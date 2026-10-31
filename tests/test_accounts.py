@@ -10,6 +10,7 @@ from ptmail.compose import Draft
 from ptmail.models import Folder, Message, MessageContent
 from ptmail.sounds import NEW_MAIL, SYNCED
 from ptmail.ui import accounts_dialog as ad
+from ptmail.ui.account_dialog import AccountDialog
 from ptmail.ui import compose_dialog as cd
 from ptmail.ui import main_frame as mf
 
@@ -299,6 +300,37 @@ def test_config_round_trip_and_bad_entries(tmp_path, monkeypatch):
     data["accounts"].append({"name": "x", "email": "e", "provider_key": "nieznany"})
     path.write_text(json.dumps(data), encoding="utf-8")
     assert config.load_accounts() == ACCOUNTS
+
+
+def test_accounts_saved_before_display_name_still_load(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    path = config.config_path()
+    path.parent.mkdir()
+    old = {"name": "iCloud", "email": ICLOUD.email, "provider_key": "icloud"}
+    path.write_text(json.dumps({"accounts": [old]}), encoding="utf-8")
+    assert config.load_accounts() == [ICLOUD]
+    named = Account("iCloud", ICLOUD.email, "icloud", "Jan Kowalski")
+    config.save_accounts([named])
+    assert config.load_accounts() == [named]
+
+
+def test_account_dialog_shows_and_keeps_display_name(app):
+    parent = wx.Frame(None)
+    named = Account("iCloud", ICLOUD.email, "icloud", "Jan Kowalski")
+    dialog = AccountDialog(parent, named)
+    assert dialog._display_name.GetValue() == "Jan Kowalski"
+    dialog.Destroy()
+    parent.Destroy()
+
+
+def test_compose_sends_name_of_selected_account(frame):
+    named = Account("iCloud", ICLOUD.email, "icloud", "Jan Kowalski")
+    workers = {GMAIL.email: FakeWorker(GMAIL), ICLOUD.email: FakeWorker(named)}
+    dialog = cd.ComposeDialog(frame, [GMAIL, named], Draft(sender=ICLOUD.email), workers)
+    dialog._to.SetValue("a@b.pl")
+    dialog.send()
+    assert b"From: Jan Kowalski <ja@icloud.com>" in workers[ICLOUD.email].sent[0]
+    dialog.Destroy()
 
 
 def test_passwords_never_reach_config(tmp_path, monkeypatch):

@@ -123,6 +123,7 @@ Domyślny folder zapisu to Pobrane, z możliwością zmiany w ustawieniach.
 Okno pisania ma pola w stałej kolejności Tab: **Od, Do, DW, Temat, Treść, Załączniki, Wyślij**. Przy nowej wiadomości fokus startuje w polu Do, przy odpowiedzi w treści.
 
 - **Od:** lista rozwijana z kontami. Przy odpowiedzi i przekazaniu PT Mail sam wybiera konto, na które przyszła wiadomość. Przy nowej wiadomości pierwsze konto na liście w oknie Konta.
+  Adresat widzi imię i nazwisko podane przy koncie w oknie Konta, a gdy pole jest puste, sam adres.
 - **Do / DW:** zwykłe pola tekstowe, adresy rozdzielone przecinkiem. Podpowiadanie adresów z wysłanej poczty to etap 2.
 - **Treść:** czysty tekst. Przy odpowiedzi cytat oryginału poniżej, poprzedzony linią „W dniu…, … napisał(a):”.
 - **Załączniki:** Ctrl+Shift+A otwiera systemowe okno wyboru plików; lista dołączonych plików pod treścią, Delete usuwa plik z listy.

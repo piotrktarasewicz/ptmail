@@ -2,6 +2,7 @@ import email
 from datetime import datetime, timezone
 from email.policy import default
 
+from ptmail.accounts import Account
 from ptmail.compose import (
     Draft,
     build_message,
@@ -13,6 +14,7 @@ from ptmail.message_parser import parse_message
 from ptmail.models import Attachment, MessageContent
 
 ME = "ja@example.com"
+ACCOUNT = Account("Praca", ME, "icloud")
 
 
 def original(**changes):
@@ -112,7 +114,7 @@ def test_build_message_round_trip():
         in_reply_to="<1@b.pl>",
         references="<0@b.pl> <1@b.pl>",
     )
-    raw = build_message(ME, draft)
+    raw = build_message(ACCOUNT, draft)
     assert raw.isascii() or b"\r\n" in raw
     message = parsed(raw)
     assert message["From"] == ME
@@ -127,8 +129,24 @@ def test_build_message_round_trip():
     assert content.attachments[0].data == b"PDF"
 
 
+def test_sender_name_reaches_recipient_with_polish_letters():
+    account = Account("Praca", ME, "icloud", "Paweł Żółć")
+    raw = build_message(account, Draft(body="x"))
+    assert raw.isascii()
+    [address] = parsed(raw)["From"].addresses
+    assert address.display_name == "Paweł Żółć"
+    assert address.addr_spec == ME
+
+
+def test_sender_name_with_comma_stays_one_address():
+    account = Account("Praca", ME, "icloud", "Kowalski, Jan")
+    [address] = parsed(build_message(account, Draft(body="x")))["From"].addresses
+    assert address.display_name == "Kowalski, Jan"
+    assert address.addr_spec == ME
+
+
 def test_build_message_for_draft_without_recipients():
-    message = parsed(build_message(ME, Draft(body="szkic")))
+    message = parsed(build_message(ACCOUNT, Draft(body="szkic")))
     assert message["To"] is None
     assert message.get_content().strip() == "szkic"
 

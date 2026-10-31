@@ -37,6 +37,9 @@ class AccountDialog(wx.Dialog):
         )
         self._provider.SetSelection(0)
         self._name = add_field(_("Nazwa konta:"), lambda: wx.TextCtrl(self))
+        self._display_name = add_field(
+            _("Imię i nazwisko:"), lambda: wx.TextCtrl(self)
+        )
         self._email = add_field(_("Adres e-mail:"), lambda: wx.TextCtrl(self))
         self._password = add_field(
             _("Hasło aplikacji:"), lambda: wx.TextCtrl(self, style=wx.TE_PASSWORD)
@@ -47,6 +50,7 @@ class AccountDialog(wx.Dialog):
         if account is not None:
             self._provider.SetSelection(self._provider_keys.index(account.provider_key))
             self._name.SetValue(account.name)
+            self._display_name.SetValue(account.display_name)
             self._email.SetValue(account.email)
 
         self._ok = wx.Button(self, wx.ID_OK, _("Zapisz"))
@@ -83,7 +87,8 @@ class AccountDialog(wx.Dialog):
             self._show_error(_("Wpisz hasło aplikacji"), self._password)
             return
         name = self._name.GetValue().strip() or PROVIDERS[provider_key].label
-        account = Account(name, email, provider_key)
+        display_name = " ".join(self._display_name.GetValue().split())
+        account = Account(name, email, provider_key, display_name)
         self._ok.Disable()
         self._status.SetValue(_("Sprawdzam połączenie"))
         threading.Thread(

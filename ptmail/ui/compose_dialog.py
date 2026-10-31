@@ -94,10 +94,13 @@ class ComposeDialog(wx.Dialog):
         else:
             event.Skip()
 
+    def _sender_account(self):
+        return self._accounts[self._sender.GetSelection()]
+
     def _current_draft(self):
         return replace(
             self._draft,
-            sender=self._accounts[self._sender.GetSelection()].email,
+            sender=self._sender_account().email,
             to=self._to.GetValue().strip(),
             cc=self._cc.GetValue().strip(),
             subject=" ".join(self._subject.GetValue().split()),
@@ -134,7 +137,7 @@ class ComposeDialog(wx.Dialog):
             return
         self._set_busy(True)
         self._workers[draft.sender].send(
-            to + cc, build_message(draft.sender, draft), self._on_done
+            to + cc, build_message(self._sender_account(), draft), self._on_done
         )
 
     def cancel(self):
@@ -155,7 +158,7 @@ class ComposeDialog(wx.Dialog):
             self._set_busy(True)
             draft = self._current_draft()
             self._workers[draft.sender].save_draft(
-                build_message(draft.sender, draft), self._on_done
+                build_message(self._sender_account(), draft), self._on_done
             )
         elif answer == wx.ID_NO:
             self.EndModal(wx.ID_CANCEL)

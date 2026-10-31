@@ -35,6 +35,7 @@ class Account:
     name: str
     email: str
     provider_key: str
+    display_name: str = ""  # imię i nazwisko widoczne u adresata
 
     @property
     def provider(self):

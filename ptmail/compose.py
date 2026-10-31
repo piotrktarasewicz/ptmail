@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from email.message import EmailMessage
 from email.policy import SMTP
-from email.utils import formatdate, getaddresses, make_msgid
+from email.utils import formataddr, formatdate, getaddresses, make_msgid
 from pathlib import Path
 
 from .i18n import _
@@ -133,16 +133,16 @@ def attachment_from_file(path):
     return Attachment(path.name, content_type, path.read_bytes())
 
 
-def build_message(sender, draft):
+def build_message(account, draft):
     message = EmailMessage()
-    message["From"] = sender
+    message["From"] = formataddr((account.display_name, account.email))
     if draft.to:
         message["To"] = draft.to.replace(";", ",")
     if draft.cc:
         message["Cc"] = draft.cc.replace(";", ",")
     message["Subject"] = draft.subject
     message["Date"] = formatdate(localtime=True)
-    message["Message-ID"] = make_msgid(domain=sender.rpartition("@")[2])
+    message["Message-ID"] = make_msgid(domain=account.email.rpartition("@")[2])
     if draft.in_reply_to:
         message["In-Reply-To"] = draft.in_reply_to
     if draft.references:

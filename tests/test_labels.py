@@ -55,6 +55,7 @@ def test_account_fields_have_labels(frame):
     assert field_labels(dialog) == [
         "Rodzaj konta:",
         "Nazwa konta:",
+        "Imię i nazwisko:",
         "Adres e-mail:",
         "Hasło aplikacji:",
         "Stan:",
