@@ -40,7 +40,7 @@ Program ma trzy poziomy, przez które chodzi się jak po drzewie: Enter idzie w 
 
 1. **Skrzynki** (ekran startowy)
    - Wszystkie skrzynki: wspólna skrzynka odbiorcza trzech kont, zawsze pierwsza na liście.
-   - Poniżej każde konto z nazwą nadaną przez użytkownika, a pod nim jego foldery: Odebrane, Wysłane, Robocze, Kosz, własne foldery.
+   - Poniżej każde konto z nazwą nadaną przez użytkownika (Enter otwiera jego Odebrane), a pod nim jego foldery: Odebrane, Wysłane, Robocze, Kosz, własne foldery. Wiersz folderu kończy nazwa konta, np. „Odebrane, 2 nieprzeczytane, iCloud”.
    - Przy każdej pozycji liczba nieprzeczytanych, np. „Wszystkie skrzynki, 3 nieprzeczytane”.
 2. **Lista wiadomości** wybranej skrzynki, od najnowszej.
 3. **Wiadomość**: treść, a na dole załączniki.
@@ -122,7 +122,7 @@ Domyślny folder zapisu to Pobrane, z możliwością zmiany w ustawieniach.
 
 Okno pisania ma pola w stałej kolejności Tab: **Od, Do, DW, Temat, Treść, Załączniki, Wyślij**. Przy nowej wiadomości fokus startuje w polu Do, przy odpowiedzi w treści.
 
-- **Od:** lista rozwijana z trzema kontami. Przy odpowiedzi i przekazaniu PT Mail sam wybiera konto, na które przyszła wiadomość. Przy nowej wiadomości domyślne konto z ustawień.
+- **Od:** lista rozwijana z kontami. Przy odpowiedzi i przekazaniu PT Mail sam wybiera konto, na które przyszła wiadomość. Przy nowej wiadomości pierwsze konto na liście w oknie Konta.
 - **Do / DW:** zwykłe pola tekstowe, adresy rozdzielone przecinkiem. Podpowiadanie adresów z wysłanej poczty to etap 2.
 - **Treść:** czysty tekst. Przy odpowiedzi cytat oryginału poniżej, poprzedzony linią „W dniu…, … napisał(a):”.
 - **Załączniki:** Ctrl+Shift+A otwiera systemowe okno wyboru plików; lista dołączonych plików pod treścią, Delete usuwa plik z listy.

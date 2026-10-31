@@ -83,7 +83,7 @@ def test_name_with_comma_stays_one_recipient():
 
 def test_forward_keeps_attachments_and_leaves_recipient_empty():
     attachment = Attachment("a.pdf", "application/pdf", b"PDF")
-    draft = forward_draft(original(attachments=(attachment,)))
+    draft = forward_draft(original(attachments=(attachment,)), ME)
     assert draft.to == ""
     assert draft.subject == "Fwd: Faktura"
     assert draft.attachments == (attachment,)

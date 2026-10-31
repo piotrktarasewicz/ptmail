@@ -18,7 +18,7 @@ python -m venv .venv
 .venv\Scripts\python -m ptmail
 ```
 
-Przy pierwszym uruchomieniu program prosi o konto: adres i hasło aplikacji. Hasło trafia do Menedżera poświadczeń Windows, a nazwa i adres do `%APPDATA%\PT Mail\config.json`.
+Przy pierwszym uruchomieniu program prosi o konto: adres i hasło aplikacji. Kolejne konta dodaje się w menu Plik, Konta. Hasła trafiają do Menedżera poświadczeń Windows, a nazwy i adresy do `%APPDATA%\PT Mail\config.json`.
 
 ## Testy
 

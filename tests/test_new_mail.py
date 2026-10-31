@@ -9,9 +9,24 @@ from ptmail.models import Message
 from ptmail.sounds import NEW_MAIL, SYNCED, TONES, build_wav
 from ptmail.ui import main_frame as mf
 
+EMAIL = "ja@example.com"
+SENT = "Sent Messages"
+
 
 def message(uid):
     return Message(uid, "Jan", f"temat {uid}", None, False, False, 0)
+
+
+def ref(uid, folder="INBOX"):
+    return (EMAIL, folder, uid)
+
+
+class FakeWorker:
+    def refresh(self, folder, silent=False):
+        pass
+
+    def stop(self):
+        pass
 
 
 @pytest.fixture(scope="module")
@@ -28,40 +43,42 @@ def frame(app, monkeypatch):
     monkeypatch.setattr(mf, "play", played.append)
     monkeypatch.setattr(mf, "speak", spoken.append)
     window = mf.MainFrame()
-    window._account = Account("iCloud", "ja@example.com", "icloud")
+    window._accounts = [Account("iCloud", EMAIL, "icloud")]
+    window._workers = {EMAIL: FakeWorker()}
     window.IsActive = lambda: True
     window.played = played
     window.spoken = spoken
     window.Show()
     yield window
+    window._workers = {}
     window.Destroy()
 
 
 def load(window, *uids, refreshed=True):
-    window.on_messages("INBOX", [message(uid) for uid in uids], refreshed)
+    window.on_messages(EMAIL, "INBOX", [message(uid) for uid in uids], refreshed)
 
 
 def test_first_load_only_confirms(frame):
     load(frame, 2, 1)
     assert frame.played == [SYNCED]
     assert frame.spoken == []
-    assert frame._message_list.selected_key() == 2
+    assert frame._message_list.selected_key() == ref(2)
 
 
 def test_refresh_without_news_keeps_selection(frame):
     load(frame, 2, 1)
-    frame._message_list.select_key(1)
+    frame._message_list.select_key(ref(1))
     load(frame, 2, 1)
     assert frame.played == [SYNCED, SYNCED]
-    assert frame._message_list.selected_key() == 1
+    assert frame._message_list.selected_key() == ref(1)
 
 
 def test_new_message_takes_selection_and_is_read(frame):
     load(frame, 2, 1)
-    frame._message_list.select_key(1)
+    frame._message_list.select_key(ref(1))
     load(frame, 4, 3, 2, 1)
     assert frame.played == [SYNCED, NEW_MAIL]
-    assert frame._message_list.selected_key() == 4
+    assert frame._message_list.selected_key() == ref(4)
     assert frame.spoken == ["nieprzeczytana, Jan, temat 4, iCloud"]
 
 
@@ -79,25 +96,25 @@ def test_deleted_message_is_not_news(frame):
 
 def test_automatic_refresh_without_news_is_silent(frame):
     load(frame, 1)
-    frame.on_messages("INBOX", [message(1)], True, True)
+    frame.on_messages(EMAIL, "INBOX", [message(1)], True, True)
     assert frame.played == [SYNCED]
 
 
 def test_automatic_refresh_announces_new_mail(frame):
     load(frame, 1)
-    frame.on_messages("INBOX", [message(2), message(1)], True, True)
+    frame.on_messages(EMAIL, "INBOX", [message(2), message(1)], True, True)
     assert frame.played == [SYNCED, NEW_MAIL]
-    assert frame._message_list.selected_key() == 2
+    assert frame._message_list.selected_key() == ref(2)
 
 
 def test_new_mail_in_other_folder_only_plays_sound(frame):
     load(frame, 1)
-    frame._mailbox_key = "Sent Messages"
-    frame.on_messages("Sent Messages", [message(9)], False)
-    frame._show_message_rows()
-    frame.on_messages("INBOX", [message(2), message(1)], True, True)
+    frame._mailbox_key = (EMAIL, SENT)
+    frame.on_messages(EMAIL, SENT, [message(9)], False)
+    frame._message_list.select_key(ref(9, SENT))
+    frame.on_messages(EMAIL, "INBOX", [message(2), message(1)], True, True)
     assert frame.played == [SYNCED, NEW_MAIL]
-    assert frame._message_list.selected_key() == 9
+    assert frame._message_list.selected_key() == ref(9, SENT)
     assert frame.spoken == []
 
 
@@ -110,7 +127,7 @@ def test_new_message_in_inactive_window_moves_silently(frame):
     load(frame, 1)
     frame.IsActive = lambda: False
     load(frame, 2, 1)
-    assert frame._message_list.selected_key() == 2
+    assert frame._message_list.selected_key() == ref(2)
     assert frame.spoken == []
 
 
@@ -118,11 +135,11 @@ def test_reading_and_writing_are_not_interrupted(frame):
     load(frame, 1)
     frame._composing = True
     load(frame, 2, 1)
-    assert frame._message_list.selected_key() == 1
+    assert frame._message_list.selected_key() == ref(1)
     frame._composing = False
     frame._show_view(frame._mailbox_view)
     load(frame, 3, 2, 1)
-    assert frame._message_list.selected_key() == 1
+    assert frame._message_list.selected_key() == ref(1)
     assert frame.played == [SYNCED, NEW_MAIL, NEW_MAIL]
     assert frame.spoken == []
 

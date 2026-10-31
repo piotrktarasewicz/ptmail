@@ -14,7 +14,7 @@ CLOSE_DELAY_MS_PER_CHAR = 70
 class ComposeDialog(wx.Dialog):
     """Okno pisania. Tab idzie przez Od, Do, DW, Temat, Treść, Załączniki, Wyślij."""
 
-    def __init__(self, parent, account, draft, worker):
+    def __init__(self, parent, accounts, draft, workers):
         super().__init__(
             parent,
             title=_("Nowa wiadomość"),
@@ -22,9 +22,11 @@ class ComposeDialog(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
         self.result_text = ""
-        self._account = account
-        self._draft = draft
-        self._worker = worker
+        self._accounts = accounts
+        emails = [account.email for account in accounts]
+        sender = emails.index(draft.sender) if draft.sender in emails else 0
+        self._draft = replace(draft, sender=emails[sender])
+        self._workers = workers
         self._attachments = list(draft.attachments)
         self._busy = False
 
@@ -40,9 +42,11 @@ class ComposeDialog(wx.Dialog):
 
         self._sender = add_field(
             _("Od:"),
-            lambda: wx.Choice(self, choices=[f"{account.name} ({account.email})"]),
+            lambda: wx.Choice(
+                self, choices=[f"{a.name} ({a.email})" for a in accounts]
+            ),
         )
-        self._sender.SetSelection(0)
+        self._sender.SetSelection(sender)
         self._to = add_field(_("Do:"), lambda: wx.TextCtrl(self, value=draft.to))
         self._cc = add_field(_("DW:"), lambda: wx.TextCtrl(self, value=draft.cc))
         self._subject = add_field(
@@ -93,6 +97,7 @@ class ComposeDialog(wx.Dialog):
     def _current_draft(self):
         return replace(
             self._draft,
+            sender=self._accounts[self._sender.GetSelection()].email,
             to=self._to.GetValue().strip(),
             cc=self._cc.GetValue().strip(),
             subject=" ".join(self._subject.GetValue().split()),
@@ -128,8 +133,8 @@ class ComposeDialog(wx.Dialog):
             (self._to if bad_to else self._cc).SetFocus()
             return
         self._set_busy(True)
-        self._worker.send(
-            to + cc, build_message(self._account.email, draft), self._on_done
+        self._workers[draft.sender].send(
+            to + cc, build_message(draft.sender, draft), self._on_done
         )
 
     def cancel(self):
@@ -148,9 +153,9 @@ class ComposeDialog(wx.Dialog):
             answer = dialog.ShowModal()
         if answer == wx.ID_YES:
             self._set_busy(True)
-            self._worker.save_draft(
-                build_message(self._account.email, self._current_draft()),
-                self._on_done,
+            draft = self._current_draft()
+            self._workers[draft.sender].save_draft(
+                build_message(draft.sender, draft), self._on_done
             )
         elif answer == wx.ID_NO:
             self.EndModal(wx.ID_CANCEL)

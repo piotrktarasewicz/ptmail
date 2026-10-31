@@ -12,20 +12,28 @@ def config_path():
     return Path(base) / APP_NAME / "config.json"
 
 
-def load_account():
-    """Zwraca zapisane konto albo None. Etap 1 zaczyna od jednego konta."""
+def load_accounts():
+    """Zwraca zapisane konta. Pierwsze na liście jest domyślne przy nowej wiadomości."""
     try:
         data = json.loads(config_path().read_text(encoding="utf-8"))
-        account = Account(**data["accounts"][0])
-    except (OSError, ValueError, KeyError, IndexError, TypeError):
-        return None
-    return account if account.provider_key in PROVIDERS else None
+        entries = data["accounts"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    accounts = []
+    for entry in entries:
+        try:
+            account = Account(**entry)
+        except TypeError:
+            continue
+        if account.provider_key in PROVIDERS:
+            accounts.append(account)
+    return accounts
 
 
-def save_account(account):
+def save_accounts(accounts):
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {"accounts": [asdict(account)]}
+    data = {"accounts": [asdict(account) for account in accounts]}
     path.write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
     )

@@ -3,6 +3,7 @@ import threading
 import wx
 
 from ..accounts import PROVIDERS, Account
+from ..credentials import get_password
 from ..i18n import _
 from ..imap_client import ImapAuthError, ImapError, check_login
 
@@ -10,10 +11,12 @@ from ..imap_client import ImapAuthError, ImapError, check_login
 class AccountDialog(wx.Dialog):
     """Dodawanie konta. Dane zatwierdza dopiero udane logowanie na serwerze."""
 
-    def __init__(self, parent, account=None):
+    def __init__(self, parent, account=None, taken_emails=()):
         super().__init__(parent, title=_("Konto pocztowe"))
         self.account = None
         self.password = None
+        self._existing = account
+        self._taken_emails = {email.casefold() for email in taken_emails}
         self._provider_keys = list(PROVIDERS)
 
         fields = wx.FlexGridSizer(cols=2, vgap=6, hgap=6)
@@ -67,8 +70,14 @@ class AccountDialog(wx.Dialog):
         email = self._email.GetValue().strip()
         # Google pokazuje hasła aplikacji ze spacjami, a serwer chce je bez nich.
         password = self._password.GetValue().replace(" ", "")
+        if not password and self._existing is not None:
+            # Przy zmianie konta puste pole zostawia dotychczasowe hasło.
+            password = get_password(self._existing) or ""
         if "@" not in email:
             self._show_error(_("Wpisz adres e-mail"), self._email)
+            return
+        if email.casefold() in self._taken_emails:
+            self._show_error(_("To konto już jest dodane"), self._email)
             return
         if not password:
             self._show_error(_("Wpisz hasło aplikacji"), self._password)

@@ -9,6 +9,7 @@ import wx
 from ptmail.accounts import Account
 from ptmail.compose import Draft
 from ptmail.ui.account_dialog import AccountDialog
+from ptmail.ui.accounts_dialog import AccountsDialog
 from ptmail.ui.compose_dialog import ComposeDialog
 from ptmail.ui.list_view import ListView
 from ptmail.ui.message_view import MessageView
@@ -44,7 +45,7 @@ def field_labels(parent):
 
 
 def test_compose_fields_have_labels(frame):
-    dialog = ComposeDialog(frame, ACCOUNT, Draft(), None)
+    dialog = ComposeDialog(frame, [ACCOUNT], Draft(), {})
     assert field_labels(dialog) == ["Od:", "Do:", "DW:", "Temat:", "Treść:", "Załączniki:"]
     dialog.Destroy()
 
@@ -58,6 +59,12 @@ def test_account_fields_have_labels(frame):
         "Hasło aplikacji:",
         "Stan:",
     ]
+    dialog.Destroy()
+
+
+def test_accounts_list_has_label(frame):
+    dialog = AccountsDialog(frame, [ACCOUNT])
+    assert field_labels(dialog) == ["Konta:"]
     dialog.Destroy()
 
 

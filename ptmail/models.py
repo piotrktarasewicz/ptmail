@@ -19,6 +19,13 @@ class Message:
     seen: bool
     flagged: bool
     attachments: int
+    account: str = ""  # adres konta, uzupełniany po pobraniu
+    folder: str = ""
+
+    @property
+    def key(self):
+        """Numer UID jest unikalny tylko w folderze jednego konta."""
+        return (self.account, self.folder, self.uid)
 
 
 @dataclass(frozen=True)

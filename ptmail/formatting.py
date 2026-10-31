@@ -26,8 +26,9 @@ def attachments_text(count):
     return plural(count, "{count} załącznik", "{count} załączniki", "{count} załączników")
 
 
-def mailbox_sentence(label, unread):
-    return f"{label}, {unread_text(unread)}" if unread else label
+def mailbox_sentence(label, unread, account_name=None):
+    parts = (label, unread_text(unread) if unread else "", account_name or "")
+    return ", ".join(part for part in parts if part)
 
 
 def format_date(value, now=None):

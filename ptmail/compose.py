@@ -18,6 +18,7 @@ FORWARD_PREFIX_RE = re.compile(r"(fwd?|pd)\s*:", re.IGNORECASE)
 
 @dataclass(frozen=True)
 class Draft:
+    sender: str = ""  # adres konta, z którego idzie wiadomość
     to: str = ""
     cc: str = ""
     subject: str = ""
@@ -81,6 +82,7 @@ def reply_draft(content, own_email, reply_all=False):
     if not REPLY_PREFIX_RE.match(subject):
         subject = f"Re: {subject}"
     return Draft(
+        sender=own_email,
         to=_join(to),
         cc=_join(cc),
         subject=subject,
@@ -91,7 +93,7 @@ def reply_draft(content, own_email, reply_all=False):
     )
 
 
-def forward_draft(content):
+def forward_draft(content, own_email):
     subject = content.subject
     if not FORWARD_PREFIX_RE.match(subject):
         subject = f"Fwd: {subject}"
@@ -105,6 +107,7 @@ def forward_draft(content):
         )
     )
     return Draft(
+        sender=own_email,
         subject=subject,
         body=f"\n\n{header}\n\n{content.body}",
         attachments=content.attachments,

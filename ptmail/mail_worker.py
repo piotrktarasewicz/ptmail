@@ -52,7 +52,7 @@ class MailWorker(threading.Thread):
 
     def __init__(self, account, password, listener, dispatch):
         super().__init__(daemon=True)
-        self._account = account
+        self.account = account
         self._password = password
         self._client = ImapClient(account, password)
         self._listener = listener
@@ -117,7 +117,7 @@ class MailWorker(threading.Thread):
             self._client.close()
             self._report(
                 _("Brak połączenia z {name}, spróbuję ponownie").format(
-                    name=self._account.name
+                    name=self.account.name
                 )
             )
             return request
@@ -125,12 +125,12 @@ class MailWorker(threading.Thread):
             self._client.close()
             self._report(
                 _("Logowanie do {name} nie powiodło się").format(
-                    name=self._account.name
+                    name=self.account.name
                 )
             )
         except ImapError:
             self._report(_("Nie udało się pobrać poczty z {name}").format(
-                name=self._account.name
+                name=self.account.name
             ))
         return None
 
@@ -174,7 +174,7 @@ class MailWorker(threading.Thread):
     def _send(self, request):
         try:
             refused = send_mail(
-                self._account, self._password, request.recipients, request.raw
+                self.account, self._password, request.recipients, request.raw
             )
         except SmtpAuthError:
             self._finish(request, False, _("Serwer odrzucił hasło aplikacji"))
@@ -189,7 +189,7 @@ class MailWorker(threading.Thread):
             text = _("Wysłano, ale serwer odrzucił część odbiorców")
         else:
             text = _("Wysłano")
-        if not self._account.provider.saves_sent and not self._append(
+        if not self.account.provider.saves_sent and not self._append(
             "sent", "(\\Seen)", request.raw
         ):
             text = _("Wysłano, ale nie zapisano w folderze Wysłane")
