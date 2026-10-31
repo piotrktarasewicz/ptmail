@@ -184,6 +184,21 @@ def test_error_on_one_account_blocks_confirmation_sound(frame):
     assert frame.spoken == ["Brak połączenia z Praca, spróbuję ponownie"]
 
 
+def test_error_at_startup_is_spoken_after_window_is_read(frame, monkeypatch):
+    delayed = []
+    monkeypatch.setattr(
+        mf.wx, "CallLater", lambda ms, run, *args: delayed.append((ms, run, args))
+    )
+    frame._initial_load = True
+    frame._check_mail()
+    frame.on_error(WORK.email, "Brak połączenia z Praca, spróbuję ponownie")
+    assert frame.spoken == []
+    assert delayed == [
+        (2000, mf.speak, ("Brak połączenia z Praca, spróbuję ponownie",))
+    ]
+    assert frame.GetStatusBar().GetStatusText().startswith("Brak połączenia")
+
+
 def test_new_mail_on_any_account_selects_it_in_all_mailboxes(frame):
     load_all(frame)
     newest = message(2, 12, "nowy")

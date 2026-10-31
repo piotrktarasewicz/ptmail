@@ -35,6 +35,7 @@ SEARCH_KEY = "search"
 OPENED_CACHE_SIZE = 30
 SEARCH_RESULT_LIMIT = 200
 AFTER_FOCUS_SPEECH_DELAY_MS = 300
+STARTUP_SPEECH_DELAY_MS = 2000
 
 
 @dataclass
@@ -325,7 +326,12 @@ class MainFrame(wx.Frame):
             speak(message_sentence(message, self._row_account_name(message)))
 
     def on_error(self, email, text):
-        self._say(text)
+        if self._initial_load:
+            # NVDA ucisza mowę, gdy czyta dopiero co otwarte okno.
+            self.SetStatusText(text)
+            wx.CallLater(STARTUP_SPEECH_DELAY_MS, speak, text)
+        else:
+            self._say(text)
         self._sync_clean = False
         self._finish_sync(email)
 
