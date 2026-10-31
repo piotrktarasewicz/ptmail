@@ -162,6 +162,7 @@ class MailWorker(threading.Thread):
             request.folder,
             request.uid,
             parse_message(raw),
+            raw,
         )
 
     def _perform(self, request):

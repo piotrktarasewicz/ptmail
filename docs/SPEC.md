@@ -27,7 +27,7 @@ Wszystkie trzy konta obsługujemy jednym protokołem: IMAP do odbioru i SMTP do 
 Stos technologiczny:
 
 - **Język i interfejs:** Python + wxPython, ten sam stos co PT Calendar Manager. Interfejs po polsku, ale od początku z obsługą tłumaczeń (gettext).
-- **Pamięć podręczna:** lokalna baza SQLite z nagłówkami i treścią wiadomości z ostatnich 90 dni, żeby listy otwierały się natychmiast. Starsza poczta zostaje tylko na serwerze.
+- **Pamięć podręczna:** lokalna baza SQLite z nagłówkami z ostatnich 90 dni i treścią wiadomości już otwartych (do 10 MB każda), żeby listy i przeczytana poczta otwierały się natychmiast, także bez internetu. Starsza poczta zostaje tylko na serwerze. Baza nie jest szyfrowana i leży w `%APPDATA%\PT Mail\cache.db`.
 - **Nowa poczta:** IMAP IDLE na osobnym połączeniu z folderem Odebrane, czyli serwer sam powiadamia o nowych wiadomościach, bez ciągłego odpytywania. Inne foldery odświeża F5.
 - **Hasła:** Menedżer poświadczeń Windows (biblioteka keyring), nigdy w pliku konfiguracyjnym.
 - **Treść wiadomości:** HTML zamieniony na czysty tekst, bo tylko on zawiera opisy linków, a gdy go brak, część tekstowa maila.
@@ -150,13 +150,13 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 
 **Etap 1 — MVP**
 
-- [ ] Dodawanie kont: adres + hasło aplikacji, serwery Gmaila i iCloud wpisane z góry
-- [ ] Ekran Skrzynki z Wszystkimi skrzynkami i folderami kont
-- [ ] Lista wiadomości z czytaniem wiersza i czynnościami
-- [ ] Widok wiadomości jako czysty tekst + lista załączników
-- [ ] Pisanie: nowa, odpowiedź, odpowiedź wszystkim, przekazanie, załączniki
-- [ ] Kosz, archiwizacja, przeczytana/nieprzeczytana, flaga
-- [ ] Pamięć podręczna SQLite i IMAP IDLE
+- [x] Dodawanie kont: adres + hasło aplikacji, serwery Gmaila i iCloud wpisane z góry
+- [x] Ekran Skrzynki z Wszystkimi skrzynkami i folderami kont
+- [x] Lista wiadomości z czytaniem wiersza i czynnościami
+- [x] Widok wiadomości jako czysty tekst + lista załączników
+- [x] Pisanie: nowa, odpowiedź, odpowiedź wszystkim, przekazanie, załączniki
+- [x] Kosz, archiwizacja, przeczytana/nieprzeczytana, flaga
+- [x] Pamięć podręczna SQLite i IMAP IDLE
 
 **Etap 2 — wygoda**
 

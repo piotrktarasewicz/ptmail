@@ -32,7 +32,8 @@ class Listener:
         self.results = []
         self.done = threading.Event()
 
-    def on_message_opened(self, folder, uid, content):
+    def on_message_opened(self, folder, uid, content, raw):
+        assert raw == RAW
         self.results.append((uid, content.body))
         self.done.set()
 

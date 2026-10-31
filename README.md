@@ -32,6 +32,7 @@ Przy pierwszym uruchomieniu program prosi o konto: adres i hasło aplikacji. Kol
 | --- | --- |
 | `ptmail/app.py` | start programu |
 | `ptmail/ui/` | okno główne, listy, widok wiadomości, okno konta |
+| `ptmail/cache.py` | pamięć podręczna SQLite |
 | `ptmail/mail_worker.py` | wątek w tle, jedyne miejsce używające połączenia IMAP |
 | `ptmail/idle_watcher.py` | osobne połączenie IDLE, które zgłasza nową pocztę |
 | `ptmail/imap_client.py` | operacje IMAP |

@@ -227,11 +227,15 @@ def test_toggle_read_keeps_selection_and_updates_row(frame):
     assert frame._message_list.selected_key() == ref(3)
 
 
-def test_mark_unread_forgets_opened_copy(frame):
+def test_reopening_unread_message_from_memory_marks_it_read_again(frame):
     frame._message_list.select_key(ref(2))
     frame._opened[(EMAIL, "INBOX", 2)] = content()
     key(frame, ord("U"), ctrl=True)
-    assert (EMAIL, "INBOX", 2) not in frame._opened
+    frame.worker.client.calls.clear()
+    key(frame, wx.WXK_RETURN)
+    assert frame._message_view.IsShown()
+    assert frame.worker.client.calls == [("set_flag", "INBOX", 2, "\\Seen", True)]
+    assert frame._selected_message().seen
 
 
 def test_toggle_flag(frame):

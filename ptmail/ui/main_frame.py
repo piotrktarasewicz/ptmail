@@ -12,6 +12,7 @@ from ..attachments import (
     safe_filename,
     save_to_folder,
 )
+from ..cache import MailCache, open_cache
 from ..compose import Draft, forward_draft, reply_draft
 from ..config import load_accounts, save_accounts
 from ..credentials import get_password, set_password
@@ -19,7 +20,7 @@ from ..formatting import mailbox_sentence, message_sentence
 from ..i18n import _
 from ..idle_watcher import IdleWatcher
 from ..mail_worker import INBOX, MailWorker
-from ..message_parser import link_host
+from ..message_parser import link_host, parse_message
 from ..sounds import NEW_MAIL, SYNCED, play
 from ..speech import speak
 from .account_dialog import AccountDialog
@@ -55,6 +56,7 @@ class MainFrame(wx.Frame):
     def __init__(self):
         super().__init__(None, title=APP_NAME, size=(800, 600))
         self._accounts = []
+        self._cache = MailCache()
         self._workers = {}
         self._watchers = {}
         self._folders = {}
@@ -104,6 +106,7 @@ class MainFrame(wx.Frame):
 
     def _start(self):
         clear_temp()
+        self._cache = open_cache()
         accounts = load_accounts()
         if accounts:
             self._connect(accounts)
@@ -138,12 +141,25 @@ class MainFrame(wx.Frame):
         ):
             self._mailbox_key = ALL_KEY
             self._update_title()
+        self._load_from_cache()
         for account in accounts:
             self._start_session(account)
-        self._show_mailbox_rows()
-        self._show_message_rows()
         self._initial_load = True
         self._check_mail()
+
+    def _load_from_cache(self):
+        """Pokazuje od razu to, co program już ma. Nowości dojdą w tle."""
+        emails = [account.email for account in self._accounts]
+        self._cache.keep_accounts(emails)
+        for email in emails:
+            folders = self._cache.folders(email)
+            if folders:
+                self._folders[email] = list(folders)
+            for folder, messages in self._cache.messages(email).items():
+                self._messages[(email, folder)] = messages
+        self._show_mailbox_rows()
+        self._show_message_rows()
+        self._select_top_message()
 
     def _start_session(self, account):
         password = get_password(account)
@@ -214,6 +230,7 @@ class MainFrame(wx.Frame):
 
     def on_folders(self, email, folders):
         self._folders[email] = folders
+        self._cache.save_folders(email, folders)
         self.SetStatusText("")
         self._show_mailbox_rows()
 
@@ -234,6 +251,7 @@ class MainFrame(wx.Frame):
         rows = self._visible_messages() if visible else []
         at_top = not rows or self._message_list.selected_key() == rows[0].key
         self._messages[key] = messages
+        self._cache.save_messages(email, folder, messages)
         self.SetStatusText("")
         if visible:
             self._show_message_rows()
@@ -244,7 +262,8 @@ class MainFrame(wx.Frame):
             if newest is not None:
                 play(NEW_MAIL)
                 self._sync_clean = False
-                if visible:
+                # Przy starcie o zaznaczeniu decyduje najnowsza ze wszystkich kont.
+                if visible and not self._initial_load:
                     self._go_to_new_message(newest)
             if not silent:
                 self._finish_sync(email)
@@ -276,16 +295,20 @@ class MainFrame(wx.Frame):
         self._sync_clean = False
         self._finish_sync(email)
 
-    def on_message_opened(self, email, folder, uid, content):
+    def on_message_opened(self, email, folder, uid, content, raw):
         key = (email, folder, uid)
-        self._opened[key] = content
-        if len(self._opened) > OPENED_CACHE_SIZE:
-            del self._opened[next(iter(self._opened))]
+        self._remember_content(key, content)
+        self._cache.save_body(key, raw)
         self._mark_seen(key)
         pending = self._pending_open
         if pending is not None and pending[0] == key:
             self._pending_open = None
             pending[1](content)
+
+    def _remember_content(self, key, content):
+        self._opened[key] = content
+        if len(self._opened) > OPENED_CACHE_SIZE:
+            del self._opened[next(iter(self._opened))]
 
     def on_open_failed(self, email, folder, uid):
         pending = self._pending_open
@@ -334,6 +357,7 @@ class MainFrame(wx.Frame):
         for index, message in enumerate(messages):
             if message.uid == uid and not message.seen:
                 messages[index] = replace(message, seen=True)
+                self._cache.update_flags(messages[index])
                 self._change_unread(email, folder, -1)
                 self._show_message_rows()
                 return
@@ -343,6 +367,7 @@ class MainFrame(wx.Frame):
             replace(f, unread=max(0, f.unread + change)) if f.name == folder else f
             for f in self._folders.get(email, [])
         ]
+        self._cache.save_folders(email, self._folders[email])
         self._show_mailbox_rows()
 
     def _update_title(self):
@@ -393,13 +418,33 @@ class MainFrame(wx.Frame):
         message = self._selected_message()
         if message is None or message.account not in self._workers:
             return
-        content = self._opened.get(message.key)
+        content = self._known_content(message)
         if content is not None:
             self._pending_open = None
+            self._mark_read_on_server(message)
             action(content)
         else:
             self._pending_open = (message.key, action)
             self._workers[message.account].open_message(message.folder, message.uid)
+
+    def _known_content(self, message):
+        content = self._opened.get(message.key)
+        if content is None:
+            raw = self._cache.body(message.key)
+            if raw is not None:
+                content = parse_message(raw)
+                self._remember_content(message.key, content)
+        return content
+
+    def _mark_read_on_server(self, message):
+        """Otwarcie z pamięci nie dotyka serwera, więc stan trzeba przekazać osobno."""
+        if message.seen:
+            return
+        self._mark_seen(message.key)
+        self._workers[message.account].perform(
+            lambda client: client.set_flag(message.folder, message.uid, "\\Seen", True),
+            _("Nie udało się zmienić stanu wiadomości"),
+        )
 
     def _show_message(self, content):
         self._message_view.show_content(content)
@@ -488,6 +533,7 @@ class MainFrame(wx.Frame):
         self._messages[(message.account, message.folder)].remove(message)
         self._removed.add(message.key)
         self._opened.pop(message.key, None)
+        self._cache.delete_message(message.key)
         if not message.seen:
             self._change_unread(message.account, message.folder, -1)
         self._show_message_rows()
@@ -516,8 +562,6 @@ class MainFrame(wx.Frame):
         seen = not message.seen
         self._replace_message(message, replace(message, seen=seen))
         self._change_unread(message.account, message.folder, -1 if seen else 1)
-        # Bez tego ponowne otwarcie z pamięci nie oznaczyłoby jej jako przeczytanej.
-        self._opened.pop(message.key, None)
         self._workers[message.account].perform(
             lambda client: client.set_flag(message.folder, message.uid, "\\Seen", seen),
             _("Nie udało się zmienić stanu wiadomości"),
@@ -545,6 +589,7 @@ class MainFrame(wx.Frame):
     def _replace_message(self, old, new):
         messages = self._messages[(old.account, old.folder)]
         messages[messages.index(old)] = new
+        self._cache.update_flags(new)
         self._show_message_rows()
 
     def _build_context_menu(self):
@@ -802,6 +847,7 @@ class MainFrame(wx.Frame):
 
     def _on_close(self, event):
         self._stop_sessions()
+        self._cache.close()
         event.Skip()
 
     def _stop_sessions(self):
