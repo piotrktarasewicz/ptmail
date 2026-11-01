@@ -141,6 +141,15 @@ def parse_fetch(data):
     return messages
 
 
+def parse_header_blocks(data):
+    """Wyciąga same nagłówki z odpowiedzi FETCH, gdy reszta nie jest potrzebna."""
+    return [
+        item[1]
+        for item in data
+        if isinstance(item, tuple) and HEADER_MARKER in item[0]
+    ]
+
+
 def parse_body(data):
     """Wyciąga surową wiadomość z odpowiedzi na FETCH BODY[]."""
     for item in data:

@@ -36,6 +36,13 @@ class Attachment:
 
 
 @dataclass(frozen=True)
+class Contact:
+    name: str
+    address: str  # małymi literami, bo tak łatwiej łączyć powtórzenia
+    uses: int = 1
+
+
+@dataclass(frozen=True)
 class Link:
     start: int  # pozycje w treści, w znakach Pythona
     end: int

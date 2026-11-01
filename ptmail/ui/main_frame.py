@@ -15,6 +15,7 @@ from ..attachments import (
 from ..cache import MailCache, open_cache
 from ..compose import Draft, forward_draft, reply_draft
 from ..config import load_accounts, save_accounts
+from ..contacts import merge_contacts, parse_contacts
 from ..credentials import get_password, set_password
 from ..formatting import found_text, mailbox_sentence, message_sentence
 from ..i18n import _
@@ -174,6 +175,8 @@ class MainFrame(wx.Frame):
             self._start_session(account)
         self._initial_load = True
         self._check_mail()
+        for worker in self._workers.values():
+            worker.collect_contacts()
 
     def _load_from_cache(self):
         """Pokazuje od razu to, co program już ma. Nowości dojdą w tle."""
@@ -265,6 +268,9 @@ class MainFrame(wx.Frame):
         self._cache.save_folders(email, folders)
         self.SetStatusText("")
         self._show_mailbox_rows()
+
+    def on_contacts(self, email, contacts):
+        self._cache.save_contacts(email, contacts)
 
     def on_action_failed(self, email, text):
         self._say(text)
@@ -828,13 +834,29 @@ class MainFrame(wx.Frame):
         focused = wx.Window.FindFocus()
         self._composing = True
         self._pending_search = None
-        with ComposeDialog(self, accounts, draft, self._workers) as dialog:
+        with ComposeDialog(
+            self, accounts, draft, self._workers, self._contacts()
+        ) as dialog:
             dialog.ShowModal()
             result = dialog.result_text
+            sent = dialog.sent_draft
         self._composing = False
+        if sent is not None:
+            self._cache.add_contacts(
+                sent.sender, parse_contacts(sent.to) + parse_contacts(sent.cc)
+            )
         if focused is not None:
             focused.SetFocus()
         self.SetStatusText(result)
+
+    def _contacts(self):
+        """Adresaci ze wszystkich kont, bez adresów samych kont."""
+        own = {account.email.lower() for account in self._accounts}
+        return [
+            contact
+            for contact in merge_contacts(self._cache.contacts())
+            if contact.address not in own
+        ]
 
     def _new_message(self):
         self._compose(Draft())

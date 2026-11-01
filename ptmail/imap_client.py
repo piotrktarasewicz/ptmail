@@ -5,10 +5,12 @@ import time
 from dataclasses import replace
 from datetime import date, timedelta
 
+from .contacts import contacts_from_headers
 from .imap_parser import (
     parse_body,
     parse_fetch,
     parse_folders,
+    parse_header_blocks,
     parse_search_folders,
     parse_unread,
 )
@@ -22,7 +24,9 @@ EXISTS_RE = re.compile(rb"\* \d+ EXISTS\b")
 CACHE_DAYS = 90
 MESSAGE_LIMIT = 200
 SEARCH_LIMIT = 100
+SENT_SCAN_LIMIT = 500
 FETCH_ITEMS = "(UID FLAGS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
+RECIPIENT_ITEMS = "(BODY.PEEK[HEADER.FIELDS (TO CC)])"
 # Skróty miesięcy z RFC 3501, bo strftime zależy od ustawień regionalnych.
 MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
@@ -102,14 +106,20 @@ class ImapClient:
         return self._fetch_headers(data, MESSAGE_LIMIT)
 
     def _fetch_headers(self, search_data, limit):
-        found = search_data[0] if search_data else None
-        uids = found.split()[-limit:] if found else []
+        uids = _newest_uids(search_data, limit)
         if not uids:
             return []
-        data = self._call(
-            self._imap.uid, "FETCH", b",".join(uids).decode("ascii"), FETCH_ITEMS
-        )
+        data = self._call(self._imap.uid, "FETCH", uids, FETCH_ITEMS)
         return sorted(parse_fetch(data), key=_sort_key, reverse=True)
+
+    def fetch_sent_contacts(self):
+        """Adresaci najnowszych wysłanych wiadomości. Czyta tylko pola Do i DW."""
+        self._call(self._imap.select, quote(self._folder_for_role("sent")), True)
+        uids = _newest_uids(self._call(self._imap.uid, "SEARCH", "ALL"), SENT_SCAN_LIMIT)
+        if not uids:
+            return []
+        data = self._call(self._imap.uid, "FETCH", uids, RECIPIENT_ITEMS)
+        return contacts_from_headers(parse_header_blocks(data))
 
     def search(self, folder, query):
         """Szuka na serwerze, więc obejmuje też pocztę starszą niż 90 dni.
@@ -263,6 +273,11 @@ class _SocketLines:
 
     def restore_timeout(self):
         self._sock.settimeout(TIMEOUT_SECONDS)
+
+
+def _newest_uids(search_data, limit):
+    found = search_data[0] if search_data else None
+    return b",".join(found.split()[-limit:]).decode("ascii") if found else ""
 
 
 def _is_new_mail(line):

@@ -10,11 +10,12 @@ import sqlite3
 from datetime import datetime
 
 from .config import config_path
-from .models import Folder, Message
+from .models import Contact, Folder, Message
 
 logger = logging.getLogger(__name__)
 SCHEMA_VERSION = 1
 MAX_BODY_BYTES = 10 * 1024 * 1024
+TABLES = ("folders", "messages", "bodies", "contacts")
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS folders (
     account TEXT, name TEXT, label TEXT, role TEXT, unread INTEGER, position INTEGER,
@@ -28,6 +29,10 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS bodies (
     account TEXT, folder TEXT, uid INTEGER, raw BLOB,
     PRIMARY KEY (account, folder, uid)
+);
+CREATE TABLE IF NOT EXISTS contacts (
+    account TEXT, address TEXT, name TEXT, uses INTEGER,
+    PRIMARY KEY (account, address)
 );
 """
 
@@ -53,7 +58,7 @@ class MailCache:
         version = self._db.execute("PRAGMA user_version").fetchone()[0]
         if version != SCHEMA_VERSION:
             with self._db:
-                for table in ("folders", "messages", "bodies"):
+                for table in TABLES:
                     self._db.execute(f"DROP TABLE IF EXISTS {table}")
                 self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         self._db.executescript(SCHEMA)
@@ -171,11 +176,38 @@ class MailCache:
                 "INSERT OR REPLACE INTO bodies VALUES (?, ?, ?, ?)", (*key, raw)
             )
 
+    @_quiet(())
+    def contacts(self):
+        """Zwraca adresatów ze wszystkich kont. Ten sam adres może się powtórzyć."""
+        rows = self._db.execute("SELECT name, address, uses FROM contacts")
+        return [Contact(*row) for row in rows]
+
+    @_quiet()
+    def save_contacts(self, account, contacts):
+        with self._db:
+            self._db.execute("DELETE FROM contacts WHERE account = ?", (account,))
+            self._db.executemany(
+                "INSERT INTO contacts VALUES (?, ?, ?, ?)",
+                [(account, c.address, c.name, c.uses) for c in contacts],
+            )
+
+    @_quiet()
+    def add_contacts(self, account, contacts):
+        """Dopisuje adresatów właśnie wysłanej wiadomości."""
+        with self._db:
+            self._db.executemany(
+                "INSERT INTO contacts VALUES (?, ?, ?, ?)"
+                " ON CONFLICT (account, address) DO UPDATE SET"
+                " uses = uses + excluded.uses,"
+                " name = CASE WHEN excluded.name = '' THEN name ELSE excluded.name END",
+                [(account, c.address, c.name, c.uses) for c in contacts],
+            )
+
     @_quiet()
     def keep_accounts(self, emails):
         """Usuwa dane kont, których już nie ma na liście."""
         with self._db:
-            for table in ("folders", "messages", "bodies"):
+            for table in TABLES:
                 stored = self._db.execute(f"SELECT DISTINCT account FROM {table}")
                 for (account,) in stored.fetchall():
                     if account not in emails:

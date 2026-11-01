@@ -1,3 +1,4 @@
+import logging
 import queue
 import threading
 from collections.abc import Callable
@@ -8,6 +9,7 @@ from .imap_client import ImapAuthError, ImapClient, ImapConnectionError, ImapErr
 from .message_parser import parse_message
 from .smtp_client import SmtpAuthError, SmtpError, SmtpRecipientError, send_mail
 
+logger = logging.getLogger(__name__)
 INBOX = "INBOX"
 RETRY_SECONDS = 60
 
@@ -30,6 +32,11 @@ class Search:
     search_id: int
     query: str
     folder: str | None  # None to całe konto
+
+
+@dataclass(frozen=True)
+class CollectContacts:
+    pass
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,9 @@ class MailWorker(threading.Thread):
     def search(self, search_id, query, folder=None):
         self._requests.put(Search(search_id, query, folder))
 
+    def collect_contacts(self):
+        self._requests.put(CollectContacts())
+
     def perform(self, run, failure_text):
         """Zleca czynność na wiadomości. Okno pokazało już jej skutek."""
         self._requests.put(MessageAction(run, failure_text))
@@ -113,6 +123,8 @@ class MailWorker(threading.Thread):
                 self._perform(request)
             elif isinstance(request, Search):
                 self._search(request)
+            elif isinstance(request, CollectContacts):
+                self._collect_contacts()
             elif isinstance(request, SendMail):
                 self._send(request)
             elif isinstance(request, SaveDraft):
@@ -192,6 +204,16 @@ class MailWorker(threading.Thread):
             self._client.close()
             results = None
         self._emit(self._listener.on_search_done, request.search_id, results)
+
+    def _collect_contacts(self):
+        # Po cichu: podpowiedzi to dodatek, a program ma je też z poprzedniego razu.
+        try:
+            contacts = self._with_client(self._client.fetch_sent_contacts)
+        except ImapError as error:
+            logger.warning("Nie pobrano adresów z konta: %s", type(error).__name__)
+            self._client.close()
+            return
+        self._emit(self._listener.on_contacts, contacts)
 
     def _perform(self, request):
         try:

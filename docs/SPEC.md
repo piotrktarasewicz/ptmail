@@ -126,7 +126,8 @@ Okno pisania ma pola w stałej kolejności Tab: **Od, Do, DW, Temat, Treść, Za
 
 - **Od:** lista rozwijana z kontami. Przy odpowiedzi i przekazaniu PT Mail sam wybiera konto, na które przyszła wiadomość. Przy nowej wiadomości pierwsze konto na liście w oknie Konta.
   Adresat widzi imię i nazwisko podane przy koncie w oknie Konta, a gdy pole jest puste, sam adres.
-- **Do / DW:** zwykłe pola tekstowe, adresy rozdzielone przecinkiem. Podpowiadanie adresów z wysłanej poczty to etap 2.
+- **Do / DW:** zwykłe pola tekstowe, adresy rozdzielone przecinkiem. Po dwóch literach i chwili przerwy w pisaniu NVDA mówi podpowiedź z wysłanej poczty, np. „Anna Kowalska, anna@example.com, 1 z 2”. Pasuje początek adresu lub dowolnego słowa z nazwy, a najczęściej używane adresy są pierwsze. Strzałki w górę i w dół zmieniają podpowiedź, Enter wstawia ją i zostaje w polu, Escape ukrywa, a Tab po prostu idzie dalej.
+  Adresy pochodzą z pól Do i DW 500 najnowszych wiadomości z folderu Wysłane każdego konta. Program czyta je raz po starcie, bez treści wiadomości, i dopisuje adresatów każdej wysłanej wiadomości. Podpowiedzi są wspólne dla wszystkich kont.
 - **Podpis:** ustawiany przy koncie w oknie Konta. Staje pod treścią, a nad cytatem, po linii „-- ”. Zmiana konta w polu Od zmienia też podpis.
 - **Treść:** czysty tekst. Przy odpowiedzi cytat oryginału poniżej, poprzedzony linią „W dniu…, … napisał(a):”.
 - **Załączniki:** Ctrl+Shift+A otwiera systemowe okno wyboru plików; lista dołączonych plików pod treścią, Delete usuwa plik z listy.
@@ -165,7 +166,7 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 **Etap 2 — wygoda**
 
 - [x] Wyszukiwanie (Ctrl+F) w bieżącej skrzynce i we wszystkich; zawsze na serwerze, więc obejmuje też pocztę starszą niż 90 dni. „We wszystkich” pomija Kosz i Spam. Okno wyszukiwania zostaje otwarte do końca szukania: NVDA mówi „Wyszukiwanie”, Escape przerywa, a przy braku wyników można od razu poprawić zapytanie. Wyniki pokazuje lista wiadomości, a Escape wraca tam, skąd się przyszło
-- [ ] Podpowiadanie adresów z wysłanej poczty
+- [x] Podpowiadanie adresów z wysłanej poczty
 - [x] Przenoszenie do folderu
 - [x] Podpis per konto
 - [ ] Powiadomienia o nowej poczcie

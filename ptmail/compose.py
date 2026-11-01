@@ -29,14 +29,14 @@ class Draft:
     focus_body: bool = False
 
 
-def _display(name, address):
+def display_address(name, address):
     if not name:
         return address
     return f'"{name}" <{address}>' if "," in name else f"{name} <{address}>"
 
 
 def _join(addresses):
-    return ", ".join(_display(name, address) for name, address in addresses)
+    return ", ".join(display_address(name, address) for name, address in addresses)
 
 
 def _unique(addresses, excluded):

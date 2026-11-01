@@ -9,18 +9,29 @@ from ..compose import (
     parse_recipients,
     swap_signature,
 )
+from ..contacts import (
+    current_fragment,
+    insert_contact,
+    matching_contacts,
+    suggestion_sentence,
+)
 from ..formatting import attachment_sentence
 from ..i18n import _
 from ..speech import speak
 
 CLOSE_DELAY_MS = 600
 CLOSE_DELAY_MS_PER_CHAR = 70
+SUGGESTION_DELAY_MS = 400
 
 
 class ComposeDialog(wx.Dialog):
-    """Okno pisania. Tab idzie przez Od, Do, DW, Temat, Treść, Załączniki, Wyślij."""
+    """Okno pisania. Tab idzie przez Od, Do, DW, Temat, Treść, Załączniki, Wyślij.
 
-    def __init__(self, parent, accounts, draft, workers):
+    W polach Do i DW NVDA mówi podpowiedź po chwili przerwy w pisaniu: strzałki ją
+    zmieniają, Enter wstawia, a Escape ukrywa.
+    """
+
+    def __init__(self, parent, accounts, draft, workers, contacts=()):
         super().__init__(
             parent,
             title=_("Nowa wiadomość"),
@@ -28,6 +39,11 @@ class ComposeDialog(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
         self.result_text = ""
+        self.sent_draft = None
+        self._contacts = contacts
+        self._suggestions = []
+        self._suggestion_index = 0
+        self._suggestion_field = None
         self._accounts = accounts
         emails = [account.email for account in accounts]
         sender = emails.index(draft.sender) if draft.sender in emails else 0
@@ -86,6 +102,13 @@ class ComposeDialog(wx.Dialog):
         self._send_button.Bind(wx.EVT_BUTTON, lambda _event: self.send())
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
         self.Bind(wx.EVT_CLOSE, lambda _event: self.cancel())
+        self._suggestion_timer = wx.Timer(self)
+        self.Bind(
+            wx.EVT_TIMER, lambda _event: self._suggest(), self._suggestion_timer
+        )
+        for recipients in (self._to, self._cc):
+            recipients.Bind(wx.EVT_TEXT, self._on_recipients_typed)
+            recipients.Bind(wx.EVT_KILL_FOCUS, self._on_recipients_left)
         self._show_attachments()
         field = self._body if draft.focus_body else self._to
         field.SetFocus()
@@ -95,6 +118,8 @@ class ComposeDialog(wx.Dialog):
         key = event.GetKeyCode()
         # Alt odrzucamy, bo prawy Alt to dla Windows Ctrl+Alt, a Prawy Alt+Shift+A to Ą.
         control = event.ControlDown() and not event.AltDown()
+        if self._suggestions and not control and self._on_suggestion_key(key):
+            return
         if key == wx.WXK_ESCAPE:
             self.cancel()
         elif control and key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
@@ -105,6 +130,74 @@ class ComposeDialog(wx.Dialog):
             self._remove_attachment()
         else:
             event.Skip()
+
+    def _on_suggestion_key(self, key):
+        if key == wx.WXK_DOWN:
+            self._move_suggestion(1)
+        elif key == wx.WXK_UP:
+            self._move_suggestion(-1)
+        elif key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            self._accept_suggestion()
+        elif key == wx.WXK_ESCAPE:
+            self._hide_suggestions()
+            self._say(_("Podpowiedzi ukryte"))
+        else:
+            return False
+        return True
+
+    def _on_recipients_typed(self, event):
+        self._hide_suggestions()
+        self._suggestion_field = event.GetEventObject()
+        self._suggestion_timer.StartOnce(SUGGESTION_DELAY_MS)
+        event.Skip()
+
+    def _on_recipients_left(self, event):
+        self._hide_suggestions()
+        event.Skip()
+
+    def _hide_suggestions(self):
+        self._suggestion_timer.Stop()
+        self._suggestions = []
+
+    def _suggest(self):
+        field = self._suggestion_field
+        text = field.GetValue()
+        caret = field.GetInsertionPoint()
+        start, _end = current_fragment(text, caret)
+        self._suggestions = matching_contacts(self._contacts, text[start:caret])
+        self._suggestion_index = 0
+        if self._suggestions:
+            self._say_suggestion()
+
+    def _move_suggestion(self, step):
+        count = len(self._suggestions)
+        self._suggestion_index = (self._suggestion_index + step) % count
+        self._say_suggestion()
+
+    def _say_suggestion(self):
+        self._say(
+            suggestion_sentence(
+                self._suggestions[self._suggestion_index],
+                self._suggestion_index,
+                len(self._suggestions),
+            )
+        )
+
+    def _accept_suggestion(self):
+        contact = self._suggestions[self._suggestion_index]
+        field = self._suggestion_field
+        text = field.GetValue()
+        start, end = current_fragment(text, field.GetInsertionPoint())
+        value, caret = insert_contact(text, start, end, contact)
+        # ChangeValue nie wywołuje zdarzenia, więc wstawiony adres nie podpowie się znowu.
+        field.ChangeValue(value)
+        field.SetInsertionPoint(caret)
+        self._hide_suggestions()
+        self._say(_("Dodano: {name}").format(name=contact.name or contact.address))
+
+    def EndModal(self, code):
+        self._hide_suggestions()
+        super().EndModal(code)
 
     def _sender_account(self):
         return self._accounts[self._sender.GetSelection()]
@@ -126,8 +219,8 @@ class ComposeDialog(wx.Dialog):
         return replace(
             self._draft,
             sender=self._sender_account().email,
-            to=self._to.GetValue().strip(),
-            cc=self._cc.GetValue().strip(),
+            to=self._to.GetValue().strip(" ,;"),
+            cc=self._cc.GetValue().strip(" ,;"),
             subject=" ".join(self._subject.GetValue().split()),
             body=self._body.GetValue(),
             attachments=tuple(self._attachments),
@@ -162,7 +255,9 @@ class ComposeDialog(wx.Dialog):
             return
         self._set_busy(True)
         self._workers[draft.sender].send(
-            to + cc, build_message(self._sender_account(), draft), self._on_done
+            to + cc,
+            build_message(self._sender_account(), draft),
+            lambda success, text: self._on_sent(draft, success, text),
         )
 
     def cancel(self):
@@ -187,6 +282,11 @@ class ComposeDialog(wx.Dialog):
             )
         elif answer == wx.ID_NO:
             self.EndModal(wx.ID_CANCEL)
+
+    def _on_sent(self, draft, success, text):
+        if success:
+            self.sent_draft = draft
+        self._on_done(success, text)
 
     def _on_done(self, success, text):
         self._say(text)
