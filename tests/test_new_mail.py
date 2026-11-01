@@ -5,6 +5,12 @@ import pytest
 import wx
 
 from ptmail.accounts import Account
+from ptmail.config import (
+    load_accounts,
+    load_notifications,
+    save_accounts,
+    save_notifications,
+)
 from ptmail.models import Message
 from ptmail.sounds import NEW_MAIL, SYNCED, TONES, build_wav
 from ptmail.ui import main_frame as mf
@@ -142,6 +148,75 @@ def test_reading_and_writing_are_not_interrupted(frame):
     assert frame._message_list.selected_key() == ref(1)
     assert frame.played == [SYNCED, NEW_MAIL, NEW_MAIL]
     assert frame.spoken == []
+
+
+@pytest.fixture
+def notified(frame, monkeypatch):
+    shown = []
+    monkeypatch.setattr(mf, "notify", lambda title, text: shown.append((title, text)))
+    monkeypatch.setattr(frame, "_in_background", lambda: True)
+    return shown
+
+
+def test_background_mail_shows_notification_with_sender_and_subject(frame, notified):
+    load(frame, 1)
+    load(frame, 2, 1)
+    assert notified == [("Nowa wiadomość od Jan", "temat 2")]
+
+
+def test_automatic_refresh_notifies_too(frame, notified):
+    load(frame, 1)
+    frame.on_messages(EMAIL, "INBOX", [message(2), message(1)], True, True)
+    assert len(notified) == 1
+
+
+def test_several_messages_give_one_notification_about_newest(frame, notified):
+    load(frame, 1)
+    load(frame, 4, 3, 2, 1)
+    assert notified == [("Nowa wiadomość od Jan", "temat 4")]
+
+
+def test_no_notification_when_program_is_in_front(frame, notified, monkeypatch):
+    monkeypatch.setattr(frame, "_in_background", lambda: False)
+    load(frame, 1)
+    load(frame, 2, 1)
+    assert notified == []
+
+
+def test_no_notification_without_news_or_at_startup(frame, notified):
+    frame._initial_load = True
+    frame.on_messages(EMAIL, "INBOX", [message(1)], True)
+    frame._messages[(EMAIL, "INBOX")] = []
+    frame._initial_load = True
+    frame.on_messages(EMAIL, "INBOX", [message(2)], True)
+    load(frame, 2)
+    assert notified == []
+
+
+def test_turned_off_notifications_stay_off_after_restart(frame, notified):
+    frame._set_notifications(False)
+    load(frame, 1)
+    load(frame, 2, 1)
+    assert notified == []
+    assert frame.played == [SYNCED, NEW_MAIL]
+    assert load_notifications() is False
+
+
+def test_notification_setting_defaults_to_on_and_keeps_accounts():
+    assert load_notifications() is True
+    account = Account("iCloud", EMAIL, "icloud")
+    save_accounts([account])
+    save_notifications(False)
+    save_accounts([account])
+    assert load_notifications() is False
+    assert load_accounts() == [account]
+
+
+def test_program_with_active_app_is_not_in_background(frame, monkeypatch):
+    monkeypatch.setattr(wx.GetApp(), "IsActive", lambda: True, raising=False)
+    assert not frame._in_background()
+    monkeypatch.setattr(wx.GetApp(), "IsActive", lambda: False, raising=False)
+    assert frame._in_background()
 
 
 @pytest.mark.parametrize("name", [SYNCED, NEW_MAIL])

@@ -4,6 +4,7 @@ import wx
 
 from . import APP_NAME
 from .config import config_path
+from .notifications import register_app
 from .ui.main_frame import MainFrame
 
 
@@ -24,6 +25,7 @@ def _start_logging():
 
 def main():
     _start_logging()
+    register_app()
     app = wx.App()
     app.SetAppName(APP_NAME)
     frame = MainFrame()

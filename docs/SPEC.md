@@ -147,7 +147,7 @@ Fokus nie skacze sam. Zmienia się po działaniu użytkownika, zawsze w przewidy
 - Okno dialogowe tylko wtedy, gdy trzeba podjąć decyzję (np. zapisać szkic). Jedno pytanie, jasne przyciski.
 - Błędy połączenia: jedno krótkie zdanie, np. „Brak połączenia z iCloud, spróbuję ponownie”, i żadnego powtarzania przy kolejnych próbach.
 
-Nowa poczta, gdy PT Mail jest w tle: krótki dźwięk i opcjonalne powiadomienie systemowe Windows „Nowa wiadomość od Jan Kowalski”. Oba do wyłączenia w ustawieniach. Program siedzi w zasobniku systemowym i nie zamyka się przy zamknięciu okna (też do wyłączenia).
+Nowa poczta, gdy PT Mail jest w tle: krótki dźwięk i powiadomienie systemowe Windows „Nowa wiadomość od Jan Kowalski” z tematem. Powiadomienie wyłącza pozycja „Powiadomienia systemowe” w menu Plik. Przy starcie programu powiadomień nie ma, a gdy kilka wiadomości przyjdzie naraz, jedno powiadomienie mówi o najnowszej.
 
 ## Zakres i etapy
 
@@ -169,7 +169,9 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 - [x] Podpowiadanie adresów z wysłanej poczty
 - [x] Przenoszenie do folderu
 - [x] Podpis per konto
-- [ ] Powiadomienia o nowej poczcie
+- [x] Powiadomienia o nowej poczcie
+
+**Później, jeśli okaże się potrzebne:** zasobnik systemowy, czyli działanie po zamknięciu okna.
 
 **Celowo pomijamy:** kalendarz, kontakty, zadania, widok HTML, grupowanie w wątki, filtry i reguły, szyfrowanie, motywy wyglądu.
 

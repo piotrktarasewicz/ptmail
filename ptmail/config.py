@@ -12,12 +12,26 @@ def config_path():
     return Path(base) / APP_NAME / "config.json"
 
 
-def load_accounts():
-    """Zwraca zapisane konta. Pierwsze na liście jest domyślne przy nowej wiadomości."""
+def _read():
     try:
         data = json.loads(config_path().read_text(encoding="utf-8"))
-        entries = data["accounts"]
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write(data):
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def load_accounts():
+    """Zwraca zapisane konta. Pierwsze na liście jest domyślne przy nowej wiadomości."""
+    entries = _read().get("accounts")
+    if not isinstance(entries, list):
         return []
     accounts = []
     for entry in entries:
@@ -31,9 +45,16 @@ def load_accounts():
 
 
 def save_accounts(accounts):
-    path = config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = {"accounts": [asdict(account) for account in accounts]}
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    data = _read()
+    data["accounts"] = [asdict(account) for account in accounts]
+    _write(data)
+
+
+def load_notifications():
+    return _read().get("notifications") is not False
+
+
+def save_notifications(enabled):
+    data = _read()
+    data["notifications"] = enabled
+    _write(data)

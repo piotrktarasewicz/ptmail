@@ -14,7 +14,12 @@ from ..attachments import (
 )
 from ..cache import MailCache, open_cache
 from ..compose import Draft, forward_draft, reply_draft
-from ..config import load_accounts, save_accounts
+from ..config import (
+    load_accounts,
+    load_notifications,
+    save_accounts,
+    save_notifications,
+)
 from ..contacts import merge_contacts, parse_contacts
 from ..credentials import get_password, set_password
 from ..formatting import found_text, mailbox_sentence, message_sentence
@@ -22,6 +27,7 @@ from ..i18n import _
 from ..idle_watcher import IdleWatcher
 from ..mail_worker import INBOX, MailWorker
 from ..message_parser import link_host, parse_message
+from ..notifications import notify
 from ..sounds import NEW_MAIL, SYNCED, play
 from ..speech import speak
 from .account_dialog import AccountDialog
@@ -91,6 +97,7 @@ class MainFrame(wx.Frame):
         self._before_search = None
         self._last_query = ""
         self._last_everywhere = False
+        self._notifications = load_notifications()
 
         self._build_menu()
         self.CreateStatusBar()
@@ -118,6 +125,10 @@ class MainFrame(wx.Frame):
         accounts = menu.Append(wx.ID_ANY, _("&Konta…"))
         check = menu.Append(wx.ID_ANY, _("&Sprawdź pocztę teraz\tF5"))
         search = menu.Append(wx.ID_ANY, _("S&zukaj…\tCtrl+F"))
+        notifications = menu.AppendCheckItem(
+            wx.ID_ANY, _("P&owiadomienia systemowe")
+        )
+        notifications.Check(self._notifications)
         menu.AppendSeparator()
         close = menu.Append(wx.ID_EXIT, _("&Zakończ"))
         bar = wx.MenuBar()
@@ -126,7 +137,16 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, lambda _event: self._manage_accounts(), accounts)
         self.Bind(wx.EVT_MENU, lambda _event: self._check_mail(), check)
         self.Bind(wx.EVT_MENU, lambda _event: self._open_search(), search)
+        self.Bind(
+            wx.EVT_MENU,
+            lambda event: self._set_notifications(event.IsChecked()),
+            notifications,
+        )
         self.Bind(wx.EVT_MENU, lambda _event: self.Close(), close)
+
+    def _set_notifications(self, enabled):
+        self._notifications = enabled
+        save_notifications(enabled)
 
     def _start(self):
         clear_temp()
@@ -303,8 +323,20 @@ class MainFrame(wx.Frame):
                 # Przy starcie o zaznaczeniu decyduje najnowsza ze wszystkich kont.
                 if visible and not self._initial_load:
                     self._go_to_new_message(newest)
+                self._notify_new_message(newest)
             if not silent:
                 self._finish_sync(email)
+
+    def _notify_new_message(self, message):
+        if self._notifications and not self._initial_load and self._in_background():
+            notify(
+                _("Nowa wiadomość od {sender}").format(sender=message.sender),
+                message.subject,
+            )
+
+    def _in_background(self):
+        # Pytamy aplikację, bo przy otwartym oknie pisania nieaktywna jest tylko ramka.
+        return not wx.GetApp().IsActive()
 
     def _select_top_message(self):
         rows = self._visible_messages()
