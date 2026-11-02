@@ -177,7 +177,7 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 - [x] Jedna kopia programu: drugie uruchomienie pokazuje okno działającej kopii
 - [x] Instalator dla jednego użytkownika, bez pytania o uprawnienia administratora, z pozycją w menu Start, odinstalowaniem oraz wyborem startu z Windows i skrótu na pulpicie. Dane, konta i hasła zostają przy odinstalowaniu
 - [x] Start z Windows: program od razu chowa się do zasobnika i jest cichy, nie mówi o błędach połączenia ani o udanym pobraniu poczty
-- [x] Aktualizacje z wydań na GitHubie: sprawdzane po starcie i raz na dobę oraz na żądanie z menu Plik. Program pyta o zgodę tylko przy widocznym oknie bez innych otwartych okien. Po zgodzie pobiera instalator, sprawdza jego sumę kontrolną, instaluje bez okien i uruchamia się ponownie. Odmowa obowiązuje do następnego uruchomienia
+- [x] Aktualizacje z wydań na GitHubie: sprawdzane po starcie i raz na dobę oraz na żądanie z menu Plik. Program pyta o zgodę tylko przy widocznym oknie bez innych otwartych okien. Pytaniu towarzyszy dźwięk systemowy, a gdy program jest w tle, także powiadomienie. Po zgodzie okno z paskiem postępu i przyciskiem Anuluj pobiera instalator, NVDA mówi co 25 procent, a program sprawdza sumę kontrolną. Instalator pokazuje własne okno postępu, po czym program uruchamia się ponownie i mówi „Zaktualizowano do wersji…” albo zgłasza błąd. Błędy mają systemowy dźwięk błędu. Odmowa lub anulowanie obowiązuje do następnego uruchomienia
 
 **Celowo pomijamy:** kalendarz, kontakty, zadania, widok HTML, grupowanie w wątki, filtry i reguły, szyfrowanie, motywy wyglądu.
 

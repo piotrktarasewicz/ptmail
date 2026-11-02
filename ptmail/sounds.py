@@ -18,6 +18,9 @@ TONES = {
     SYNCED: ((880, 0.07),),
     NEW_MAIL: ((660, 0.1), (880, 0.14)),
 }
+# Dźwięki systemowe Windows, takie same jak w oknach innych programów.
+ATTENTION = winsound.MB_ICONASTERISK
+FAILURE = winsound.MB_ICONHAND
 
 
 def build_wav(tones):
@@ -45,6 +48,13 @@ def _sound_path(name):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(build_wav(TONES[name]))
     return path
+
+
+def beep(kind):
+    try:
+        winsound.MessageBeep(kind)
+    except RuntimeError:
+        pass
 
 
 def play(name):

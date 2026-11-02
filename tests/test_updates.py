@@ -3,12 +3,13 @@
 import hashlib
 import io
 import json
+import threading
 import urllib.error
 
 import pytest
 
 from ptmail import updates
-from ptmail.updates import Release, UpdateError
+from ptmail.updates import Release, UpdateCancelled, UpdateError
 
 PREFIX = updates.DOWNLOAD_PREFIX
 DATA = b"instalator"
@@ -28,7 +29,9 @@ def api_response(*assets, tag="v0.2.0"):
 
 
 class Response(io.BytesIO):
-    pass
+    def __init__(self, body):
+        super().__init__(body)
+        self.headers = {"Content-Length": str(len(body))}
 
 
 @pytest.fixture
@@ -105,31 +108,90 @@ def temp_dir(tmp_path, monkeypatch):
     return tmp_path
 
 
+RELEASE = Release("0.2.0", "url", SHA)
+
+
+def download(progress=None, cancelled=None):
+    return updates.download(
+        RELEASE,
+        (progress if progress is not None else []).append,
+        cancelled or threading.Event(),
+    )
+
+
 def test_download_saves_verified_installer(fake_url, temp_dir):
     fake_url(DATA)
-    path = updates.download(Release("0.2.0", "url", SHA))
+    path = download()
     assert path.read_bytes() == DATA
     assert path.name == "PTMail-Setup-0.2.0.exe"
+
+
+def test_download_reports_percent(fake_url, temp_dir, monkeypatch):
+    monkeypatch.setattr(updates, "CHUNK_BYTES", 5)
+    fake_url(DATA)
+    progress = []
+    download(progress)
+    assert progress == [50, 100]
+
+
+def test_unknown_size_reports_no_percent(fake_url, temp_dir):
+    fake_url(DATA)
+    original = updates._open
+
+    def without_size(url):
+        response = original(url)
+        response.headers = {}
+        return response
+
+    updates._open = without_size
+    progress = []
+    download(progress)
+    assert progress == [None]
+
+
+def test_cancelling_stops_and_removes_file(fake_url, temp_dir):
+    fake_url(DATA)
+    cancelled = threading.Event()
+    cancelled.set()
+    with pytest.raises(UpdateCancelled):
+        download(cancelled=cancelled)
+    assert list(temp_dir.rglob("*.exe")) == []
 
 
 def test_wrong_checksum_removes_file(fake_url, temp_dir):
     fake_url(b"podmieniony plik")
     with pytest.raises(UpdateError):
-        updates.download(Release("0.2.0", "url", SHA))
+        download()
     assert list(temp_dir.rglob("*.exe")) == []
 
 
 def test_download_failure_is_reported(fake_url, temp_dir):
     fake_url(urllib.error.URLError("brak sieci"))
     with pytest.raises(UpdateError):
-        updates.download(Release("0.2.0", "url", SHA))
+        download()
+
+
+def test_background_work_reports_failure_and_cancel_the_same_way():
+    results = []
+    finished = threading.Event()
+
+    def on_done(result, failed):
+        results.append((result, failed))
+        finished.set()
+
+    def cancelled_work():
+        raise UpdateCancelled()
+
+    updates.in_background(cancelled_work, on_done)
+    assert finished.wait(5)
+    assert results == [(None, True)]
 
 
 def test_installer_runs_silently(monkeypatch):
     runs = []
     monkeypatch.setattr(updates.subprocess, "Popen", runs.append)
     updates.run_installer("C:\\t\\s.exe")
-    assert runs == [["C:\\t\\s.exe", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]]
+    assert runs == [["C:\\t\\s.exe", "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]]
 
 
 def test_source_run_is_not_an_installation():

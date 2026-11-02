@@ -25,10 +25,15 @@ VERSION_RE = re.compile(r"v?(\d+(?:\.\d+)*)$")
 TIMEOUT_SECONDS = 30
 CHUNK_BYTES = 1024 * 1024
 HTTP_NOT_FOUND = 404
-INSTALLER_ARGUMENTS = ("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART")
+# /SILENT zostawia okno z paskiem postępu, które NVDA czyta jak każde inne.
+INSTALLER_ARGUMENTS = ("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART")
 
 
 class UpdateError(Exception):
+    pass
+
+
+class UpdateCancelled(UpdateError):
     pass
 
 
@@ -89,20 +94,33 @@ def find_update(current):
     return release
 
 
-def download(release):
-    """Pobiera instalator i sprawdza sumę kontrolną. Zwraca ścieżkę pliku."""
+def download(release, on_progress, cancelled):
+    """Pobiera instalator i sprawdza sumę kontrolną. Zwraca ścieżkę pliku.
+
+    on_progress dostaje procent albo None, gdy serwer nie podał rozmiaru.
+    cancelled to threading.Event, który przerywa pobieranie.
+    """
     folder = Path(tempfile.gettempdir()) / f"{APP_NAME} update"
     shutil.rmtree(folder, ignore_errors=True)
     path = folder / f"PTMail-Setup-{release.version}.exe"
     digest = hashlib.sha256()
+    received = 0
     try:
         folder.mkdir(parents=True, exist_ok=True)
         with _open(release.url) as response, open(path, "wb") as file:
+            total = int(response.headers.get("Content-Length") or 0)
             while chunk := response.read(CHUNK_BYTES):
+                if cancelled.is_set():
+                    raise UpdateCancelled()
                 digest.update(chunk)
                 file.write(chunk)
+                received += len(chunk)
+                on_progress(min(100, received * 100 // total) if total else None)
     except OSError as error:
         raise UpdateError(str(error)) from error
+    except UpdateCancelled:
+        path.unlink(missing_ok=True)
+        raise
     if digest.hexdigest() != release.sha256:
         path.unlink(missing_ok=True)
         raise UpdateError("Suma kontrolna instalatora się nie zgadza")
@@ -120,6 +138,8 @@ def in_background(work, on_done):
     def run():
         try:
             result = work()
+        except UpdateCancelled:
+            on_done(None, True)
         except UpdateError:
             logger.exception("Aktualizacja nie powiodła się")
             on_done(None, True)

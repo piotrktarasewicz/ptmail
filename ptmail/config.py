@@ -69,6 +69,21 @@ def save_notifications(enabled):
     _save_flag("notifications", enabled)
 
 
+def save_pending_update(version):
+    """Zapamiętuje instalowaną wersję, żeby po ponownym starcie podać wynik."""
+    data = _read()
+    data["pending_update"] = version
+    _write(data)
+
+
+def take_pending_update():
+    data = _read()
+    version = data.pop("pending_update", None)
+    if version is not None:
+        _write(data)
+    return version
+
+
 def load_hide_on_close():
     return _load_flag("hide_on_close")
 

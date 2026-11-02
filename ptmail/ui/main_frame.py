@@ -1,3 +1,4 @@
+import threading
 import webbrowser
 from dataclasses import dataclass, field, replace
 
@@ -21,6 +22,8 @@ from ..config import (
     save_accounts,
     save_hide_on_close,
     save_notifications,
+    save_pending_update,
+    take_pending_update,
 )
 from ..contacts import merge_contacts, parse_contacts
 from ..credentials import get_password, set_password
@@ -30,7 +33,7 @@ from ..idle_watcher import IdleWatcher
 from ..mail_worker import INBOX, MailWorker
 from ..message_parser import link_host, parse_message
 from ..notifications import notify
-from ..sounds import NEW_MAIL, SYNCED, play
+from ..sounds import ATTENTION, FAILURE, NEW_MAIL, SYNCED, beep, play
 from ..speech import speak
 from .account_dialog import AccountDialog
 from .accounts_dialog import AccountsDialog
@@ -40,6 +43,7 @@ from .message_view import MessageView
 from .move_dialog import MoveDialog
 from .search_dialog import SearchDialog
 from .tray import TrayIcon
+from .update_dialog import UpdateDialog
 
 ALL_KEY = "all"
 SEARCH_KEY = "search"
@@ -190,6 +194,7 @@ class MainFrame(wx.Frame):
         else:
             self.show_window()
             self._add_first_account()
+        self._report_finished_update()
         wx.CallLater(UPDATE_CHECK_DELAY_MS, self._check_for_update)
         self._update_timer.Start(UPDATE_CHECK_INTERVAL_MS)
 
@@ -228,9 +233,24 @@ class MainFrame(wx.Frame):
             work, lambda result, failed: wx.CallAfter(on_done, result, failed)
         )
 
+    def _report_finished_update(self):
+        """Po instalacji program startuje od nowa i dopiero wtedy zna jej wynik."""
+        version = take_pending_update()
+        if version is None:
+            return
+        if version == __version__:
+            beep(ATTENTION)
+            text = _("Zaktualizowano do wersji {version}").format(version=version)
+        else:
+            beep(FAILURE)
+            text = _("Nie udało się zainstalować aktualizacji")
+        self.SetStatusText(text)
+        wx.CallLater(STARTUP_SPEECH_DELAY_MS, speak, text)
+
     def _on_update_checked(self, release, failed, asked):
         if failed:
             if asked:
+                beep(FAILURE)
                 self._say(_("Nie udało się sprawdzić aktualizacji"))
         elif release is None:
             if asked:
@@ -248,43 +268,69 @@ class MainFrame(wx.Frame):
             return
         if release.version == self._declined_update and not asked:
             return
+        question = _("Jest nowa wersja PT Mail: {version}. Zainstalować ją teraz?").format(
+            version=release.version
+        )
+        beep(ATTENTION)
+        if self._in_background():
+            notify(APP_NAME, question)
         with wx.MessageDialog(
             self,
-            _("Jest nowa wersja PT Mail: {version}. Zainstalować ją teraz?").format(
-                version=release.version
-            ),
+            question,
             APP_NAME,
-            wx.YES_NO | wx.YES_DEFAULT,
+            wx.YES_NO | wx.YES_DEFAULT | wx.ICON_QUESTION,
         ) as dialog:
             dialog.SetYesNoLabels(_("Zainstaluj"), _("Później"))
             answer = dialog.ShowModal()
         if answer == wx.ID_YES:
-            self._say(_("Pobieranie aktualizacji"))
-            self._run_update_step(
-                lambda: updates.download(release), self._on_update_downloaded
-            )
+            self._download_update(release)
         else:
             self._declined_update = release.version
 
-    def _on_update_downloaded(self, path, failed):
-        if failed:
-            self._say(_("Nie udało się pobrać aktualizacji"))
+    def _download_update(self, release):
+        cancelled = threading.Event()
+        with UpdateDialog(self, cancelled.set) as dialog:
+            report = lambda percent: wx.CallAfter(dialog.show_progress, percent)
+            self._run_update_step(
+                lambda: updates.download(release, report, cancelled), dialog.finish
+            )
+            dialog.ShowModal()
+            path = dialog.path
+            failed = dialog.failed
+            was_cancelled = dialog.was_cancelled
+        if was_cancelled:
+            self._declined_update = release.version
+            self._say_after_focus(_("Anulowano aktualizację"))
+        elif failed:
+            beep(FAILURE)
+            self._say_after_focus(_("Nie udało się pobrać aktualizacji"))
         else:
-            self._install_update(path)
+            self._install_update(release.version, path)
 
-    def _install_update(self, path):
+    def _say_after_focus(self, text):
+        self.SetStatusText(text)
+        wx.CallLater(AFTER_FOCUS_SPEECH_DELAY_MS, speak, text)
+
+    def _install_update(self, version, path):
         # Zakończenie programu zamknęłoby otwarte okno pisania, więc czekamy na jego koniec.
         if not self.IsEnabled():
-            wx.CallLater(UPDATE_RETRY_MS, self._install_update, path)
+            wx.CallLater(UPDATE_RETRY_MS, self._install_update, version, path)
             return
-        self._say(_("Instalowanie, program uruchomi się ponownie"))
-        wx.CallLater(UPDATE_CLOSE_DELAY_MS, self._close_for_installer, path)
+        self._say_after_focus(_("Instalowanie, program uruchomi się ponownie"))
+        wx.CallLater(UPDATE_CLOSE_DELAY_MS, self._close_for_installer, version, path)
 
-    def _close_for_installer(self, path):
+    def _close_for_installer(self, version, path):
         if not self.IsEnabled():
-            self._install_update(path)
+            self._install_update(version, path)
             return
-        updates.run_installer(path)
+        save_pending_update(version)
+        try:
+            updates.run_installer(path)
+        except OSError:
+            take_pending_update()
+            beep(FAILURE)
+            self._say(_("Nie udało się uruchomić instalatora"))
+            return
         self.quit()
 
     def _add_first_account(self):
