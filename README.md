@@ -26,6 +26,16 @@ Przy pierwszym uruchomieniu program prosi o konto: adres i hasło aplikacji. Kol
 .venv\Scripts\python -m pytest
 ```
 
+## Instalator
+
+Potrzebny jest Inno Setup 6 (`winget install JRSoftware.InnoSetup`). Numer wersji jest w `ptmail/__init__.py`.
+
+```bash
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1
+```
+
+Gotowy plik to `dist\PTMail-Setup-<wersja>.exe`. Żeby program zaproponował aktualizację, wersję publikuje się jako wydanie na GitHubie z tagiem `v<wersja>` i tym plikiem.
+
 ## Struktura
 
 | Plik | Rola |
@@ -44,5 +54,9 @@ Przy pierwszym uruchomieniu program prosi o konto: adres i hasło aplikacji. Kol
 | `ptmail/formatting.py` | zdania czytane przez NVDA i tekst wiadomości |
 | `ptmail/speech.py` | komunikaty mówione przez NVDA |
 | `ptmail/sounds.py` | dźwięki pobrania i nowej poczty |
+| `ptmail/notifications.py` | powiadomienia Windows |
+| `ptmail/single_instance.py` | jedna kopia programu |
+| `ptmail/updates.py` | aktualizacje z wydań na GitHubie |
+| `packaging/` | budowanie programu i instalatora |
 | `ptmail/accounts.py`, `config.py`, `credentials.py` | konto, konfiguracja, hasło |
 | `ptmail/i18n.py` | tłumaczenia (gettext) |

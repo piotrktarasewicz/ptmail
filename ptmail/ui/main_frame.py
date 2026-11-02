@@ -3,7 +3,7 @@ from dataclasses import dataclass, field, replace
 
 import wx
 
-from .. import APP_NAME
+from .. import APP_NAME, __version__, updates
 from ..attachments import (
     can_open,
     clear_temp,
@@ -16,8 +16,10 @@ from ..cache import MailCache, open_cache
 from ..compose import Draft, forward_draft, reply_draft
 from ..config import (
     load_accounts,
+    load_hide_on_close,
     load_notifications,
     save_accounts,
+    save_hide_on_close,
     save_notifications,
 )
 from ..contacts import merge_contacts, parse_contacts
@@ -37,6 +39,7 @@ from .list_view import ListView
 from .message_view import MessageView
 from .move_dialog import MoveDialog
 from .search_dialog import SearchDialog
+from .tray import TrayIcon
 
 ALL_KEY = "all"
 SEARCH_KEY = "search"
@@ -44,6 +47,10 @@ OPENED_CACHE_SIZE = 30
 SEARCH_RESULT_LIMIT = 200
 AFTER_FOCUS_SPEECH_DELAY_MS = 300
 STARTUP_SPEECH_DELAY_MS = 2000
+UPDATE_CHECK_DELAY_MS = 5000
+UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+UPDATE_RETRY_MS = 5000
+UPDATE_CLOSE_DELAY_MS = 3000
 
 
 @dataclass
@@ -98,6 +105,11 @@ class MainFrame(wx.Frame):
         self._last_query = ""
         self._last_everywhere = False
         self._notifications = load_notifications()
+        self._hide_on_close = load_hide_on_close()
+        self._tray = None
+        self._update = None
+        self._declined_update = None
+        self._update_timer = wx.Timer(self)
 
         self._build_menu()
         self.CreateStatusBar()
@@ -114,6 +126,9 @@ class MainFrame(wx.Frame):
 
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
         self.Bind(wx.EVT_CLOSE, self._on_close)
+        self.Bind(
+            wx.EVT_TIMER, lambda _event: self._check_for_update(), self._update_timer
+        )
         self._message_list.list.Bind(wx.EVT_CONTEXT_MENU, self._on_context_menu)
         self._update_title()
         self._show_mailbox_rows()
@@ -129,8 +144,13 @@ class MainFrame(wx.Frame):
             wx.ID_ANY, _("P&owiadomienia systemowe")
         )
         notifications.Check(self._notifications)
+        hide_on_close = menu.AppendCheckItem(
+            wx.ID_ANY, _("Alt+F4 &chowa do zasobnika")
+        )
+        hide_on_close.Check(self._hide_on_close)
+        update = menu.Append(wx.ID_ANY, _("Sprawdź &aktualizacje…"))
         menu.AppendSeparator()
-        close = menu.Append(wx.ID_EXIT, _("&Zakończ"))
+        close = menu.Append(wx.ID_EXIT, _("&Zakończ\tCtrl+Q"))
         bar = wx.MenuBar()
         bar.Append(menu, _("&Plik"))
         self.SetMenuBar(bar)
@@ -142,20 +162,130 @@ class MainFrame(wx.Frame):
             lambda event: self._set_notifications(event.IsChecked()),
             notifications,
         )
-        self.Bind(wx.EVT_MENU, lambda _event: self.Close(), close)
+        self.Bind(
+            wx.EVT_MENU,
+            lambda event: self._set_hide_on_close(event.IsChecked()),
+            hide_on_close,
+        )
+        self.Bind(
+            wx.EVT_MENU, lambda _event: self._check_for_update(asked=True), update
+        )
+        self.Bind(wx.EVT_MENU, lambda _event: self.quit(), close)
 
     def _set_notifications(self, enabled):
         self._notifications = enabled
         save_notifications(enabled)
 
+    def _set_hide_on_close(self, enabled):
+        self._hide_on_close = enabled
+        save_hide_on_close(enabled)
+
     def _start(self):
         clear_temp()
         self._cache = open_cache()
+        self._tray = TrayIcon(self.show_window, self._check_mail, self.quit)
         accounts = load_accounts()
         if accounts:
             self._connect(accounts)
         else:
+            self.show_window()
             self._add_first_account()
+        wx.CallLater(UPDATE_CHECK_DELAY_MS, self._check_for_update)
+        self._update_timer.Start(UPDATE_CHECK_INTERVAL_MS)
+
+    def show_window(self):
+        """Przywraca okno z zasobnika lub z paska zadań, z fokusem na bieżącym widoku."""
+        self.Iconize(False)
+        self.Show()
+        self.Raise()
+        if self.IsEnabled():
+            next(view for view in self._views if view.IsShown()).focus()
+        self._offer_update()
+
+    def quit(self):
+        """Kończy program. Otwarte okno, np. pisania, nie może zniknąć bez pytania."""
+        if self.IsEnabled():
+            self.Close(force=True)
+        else:
+            self.show_window()
+
+    # Aktualizacje
+
+    def _check_for_update(self, asked=False):
+        if not updates.is_installed():
+            if asked:
+                self._say(_("Aktualizacje działają tylko w zainstalowanej wersji"))
+            return
+        if asked:
+            self._say(_("Sprawdzanie aktualizacji"))
+        self._run_update_step(
+            lambda: updates.find_update(__version__),
+            lambda release, failed: self._on_update_checked(release, failed, asked),
+        )
+
+    def _run_update_step(self, work, on_done):
+        updates.in_background(
+            work, lambda result, failed: wx.CallAfter(on_done, result, failed)
+        )
+
+    def _on_update_checked(self, release, failed, asked):
+        if failed:
+            if asked:
+                self._say(_("Nie udało się sprawdzić aktualizacji"))
+        elif release is None:
+            if asked:
+                self._say(
+                    _("Masz najnowszą wersję, {version}").format(version=__version__)
+                )
+        else:
+            self._update = release
+            self._offer_update(asked)
+
+    def _offer_update(self, asked=False):
+        """Pyta tylko wtedy, gdy okno jest widoczne i nic innego się w nim nie dzieje."""
+        release = self._update
+        if release is None or not self.IsShown() or not self.IsEnabled():
+            return
+        if release.version == self._declined_update and not asked:
+            return
+        with wx.MessageDialog(
+            self,
+            _("Jest nowa wersja PT Mail: {version}. Zainstalować ją teraz?").format(
+                version=release.version
+            ),
+            APP_NAME,
+            wx.YES_NO | wx.YES_DEFAULT,
+        ) as dialog:
+            dialog.SetYesNoLabels(_("Zainstaluj"), _("Później"))
+            answer = dialog.ShowModal()
+        if answer == wx.ID_YES:
+            self._say(_("Pobieranie aktualizacji"))
+            self._run_update_step(
+                lambda: updates.download(release), self._on_update_downloaded
+            )
+        else:
+            self._declined_update = release.version
+
+    def _on_update_downloaded(self, path, failed):
+        if failed:
+            self._say(_("Nie udało się pobrać aktualizacji"))
+        else:
+            self._install_update(path)
+
+    def _install_update(self, path):
+        # Zakończenie programu zamknęłoby otwarte okno pisania, więc czekamy na jego koniec.
+        if not self.IsEnabled():
+            wx.CallLater(UPDATE_RETRY_MS, self._install_update, path)
+            return
+        self._say(_("Instalowanie, program uruchomi się ponownie"))
+        wx.CallLater(UPDATE_CLOSE_DELAY_MS, self._close_for_installer, path)
+
+    def _close_for_installer(self, path):
+        if not self.IsEnabled():
+            self._install_update(path)
+            return
+        updates.run_installer(path)
+        self.quit()
 
     def _add_first_account(self):
         with AccountDialog(self) as dialog:
@@ -336,7 +466,7 @@ class MainFrame(wx.Frame):
 
     def _in_background(self):
         # Pytamy aplikację, bo przy otwartym oknie pisania nieaktywna jest tylko ramka.
-        return not wx.GetApp().IsActive()
+        return not self.IsShown() or not wx.GetApp().IsActive()
 
     def _select_top_message(self):
         rows = self._visible_messages()
@@ -349,7 +479,7 @@ class MainFrame(wx.Frame):
         if self._sync_pending:
             return
         self._initial_load = False
-        if self._sync_clean:
+        if self._sync_clean and self.IsShown():
             play(SYNCED)
 
     def _go_to_new_message(self, message):
@@ -361,11 +491,14 @@ class MainFrame(wx.Frame):
         ):
             return
         self._message_list.select_key(message.key)
-        if self.IsActive():
+        if self.IsActive() and self.IsShown():
             speak(message_sentence(message, self._row_account_name(message)))
 
     def on_error(self, email, text):
-        if self._initial_load:
+        if not self.IsShown():
+            # Schowany program nie mówi, np. gdy przy starcie Windows nie ma jeszcze sieci.
+            self.SetStatusText(text)
+        elif self._initial_load:
             # NVDA ucisza mowę, gdy czyta dopiero co otwarte okno.
             self.SetStatusText(text)
             wx.CallLater(STARTUP_SPEECH_DELAY_MS, speak, text)
@@ -434,6 +567,8 @@ class MainFrame(wx.Frame):
 
     def _show_mailbox_rows(self):
         total = sum(self._inbox_unread(a.email) for a in self._accounts)
+        if self._tray is not None:
+            self._tray.show_unread(total)
         rows = [(ALL_KEY, mailbox_sentence(_("Wszystkie skrzynki"), total))]
         for account in self._accounts:
             email = account.email
@@ -1091,6 +1226,15 @@ class MainFrame(wx.Frame):
         return True
 
     def _on_close(self, event):
+        if event.CanVeto() and self._hide_on_close and self._tray is not None:
+            event.Veto()
+            self.Hide()
+            return
+        self._update_timer.Stop()
+        if self._tray is not None:
+            self._tray.RemoveIcon()
+            self._tray.Destroy()
+            self._tray = None
         self._stop_sessions()
         self._cache.close()
         event.Skip()

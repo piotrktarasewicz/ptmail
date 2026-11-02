@@ -50,11 +50,28 @@ def save_accounts(accounts):
     _write(data)
 
 
+def _load_flag(name):
+    """Przełączniki są domyślnie włączone."""
+    return _read().get(name) is not False
+
+
+def _save_flag(name, enabled):
+    data = _read()
+    data[name] = enabled
+    _write(data)
+
+
 def load_notifications():
-    return _read().get("notifications") is not False
+    return _load_flag("notifications")
 
 
 def save_notifications(enabled):
-    data = _read()
-    data["notifications"] = enabled
-    _write(data)
+    _save_flag("notifications", enabled)
+
+
+def load_hide_on_close():
+    return _load_flag("hide_on_close")
+
+
+def save_hide_on_close(enabled):
+    _save_flag("hide_on_close", enabled)

@@ -15,13 +15,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pyinstaller>=6"]
 
 [project.gui-scripts]
 ptmail = "ptmail.app:main"
 
 [tool.setuptools.packages.find]
 include = ["ptmail*"]
+
+[tool.setuptools.package-data]
+ptmail = ["assets/*.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

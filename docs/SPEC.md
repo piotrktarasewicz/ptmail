@@ -171,7 +171,13 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 - [x] Podpis per konto
 - [x] Powiadomienia o nowej poczcie
 
-**Później, jeśli okaże się potrzebne:** zasobnik systemowy, czyli działanie po zamknięciu okna.
+**Etap 3 — codzienne używanie**
+
+- [x] Zasobnik systemowy: Alt+F4 chowa program, a poczta i powiadomienia działają dalej. Pozycja „Alt+F4 chowa do zasobnika” w menu Plik przywraca zwykłe zamykanie. Enter na ikonie otwiera okno, klawisz menu pokazuje Otwórz, Sprawdź pocztę teraz i Zakończ. Etykieta ikony podaje liczbę nieprzeczytanych. Program kończy Ctrl+Q albo Zakończ
+- [x] Jedna kopia programu: drugie uruchomienie pokazuje okno działającej kopii
+- [x] Instalator dla jednego użytkownika, bez pytania o uprawnienia administratora, z pozycją w menu Start, odinstalowaniem oraz wyborem startu z Windows i skrótu na pulpicie. Dane, konta i hasła zostają przy odinstalowaniu
+- [x] Start z Windows: program od razu chowa się do zasobnika i jest cichy, nie mówi o błędach połączenia ani o udanym pobraniu poczty
+- [x] Aktualizacje z wydań na GitHubie: sprawdzane po starcie i raz na dobę oraz na żądanie z menu Plik. Program pyta o zgodę tylko przy widocznym oknie bez innych otwartych okien. Po zgodzie pobiera instalator, sprawdza jego sumę kontrolną, instaluje bez okien i uruchamia się ponownie. Odmowa obowiązuje do następnego uruchomienia
 
 **Celowo pomijamy:** kalendarz, kontakty, zadania, widok HTML, grupowanie w wątki, filtry i reguły, szyfrowanie, motywy wyglądu.
 
