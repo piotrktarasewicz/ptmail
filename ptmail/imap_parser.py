@@ -31,6 +31,7 @@ ROLE_FLAGS = {
     b"\\drafts": "drafts",
     b"\\trash": "trash",
     b"\\junk": "junk",
+    b"\\spam": "junk",  # tak nazywa go XLIST
     b"\\archive": "archive",
 }
 # iCloud nie zawsze zgłasza role flagami, więc rozpoznajemy je też po nazwie.

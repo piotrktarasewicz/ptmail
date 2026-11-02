@@ -72,13 +72,26 @@ class AccountDialog(wx.Dialog):
         self.SetMinSize((420, -1))
         self.Fit()
         self._ok.Bind(wx.EVT_BUTTON, self._on_ok)
+        self._provider.Bind(wx.EVT_CHOICE, lambda _event: self._show_password_label())
+        self._show_password_label()
         self._provider.SetFocus()
 
+    def _selected_provider(self):
+        return PROVIDERS[self._provider_keys[self._provider.GetSelection()]]
+
+    def _show_password_label(self):
+        self._password.GetPrevSibling().SetLabel(
+            _("Hasło aplikacji:") if self._selected_provider().app_password else _("Hasło:")
+        )
+
     def _on_ok(self, _event):
-        provider_key = self._provider_keys[self._provider.GetSelection()]
+        provider = self._selected_provider()
+        provider_key = provider.key
         email = self._email.GetValue().strip()
-        # Google pokazuje hasła aplikacji ze spacjami, a serwer chce je bez nich.
-        password = self._password.GetValue().replace(" ", "")
+        password = self._password.GetValue()
+        if provider.app_password:
+            # Google pokazuje hasła aplikacji ze spacjami, a serwer chce je bez nich.
+            password = password.replace(" ", "")
         if not password and self._existing is not None:
             # Przy zmianie konta puste pole zostawia dotychczasowe hasło.
             password = get_password(self._existing) or ""
@@ -89,7 +102,10 @@ class AccountDialog(wx.Dialog):
             self._show_error(_("To konto już jest dodane"), self._email)
             return
         if not password:
-            self._show_error(_("Wpisz hasło aplikacji"), self._password)
+            self._show_error(
+                _("Wpisz hasło aplikacji") if provider.app_password else _("Wpisz hasło"),
+                self._password,
+            )
             return
         name = self._name.GetValue().strip() or PROVIDERS[provider_key].label
         display_name = " ".join(self._display_name.GetValue().split())
@@ -106,10 +122,18 @@ class AccountDialog(wx.Dialog):
             check_login(account, password)
             error = None
         except ImapAuthError:
-            error = _("Serwer odrzucił adres lub hasło aplikacji")
+            error = self._login_error(account.provider)
         except ImapError:
             error = _("Brak połączenia z serwerem")
         wx.CallAfter(self._finish, account, password, error)
+
+    @staticmethod
+    def _login_error(provider):
+        if not provider.app_password:
+            text = _("Serwer odrzucił adres lub hasło")
+        else:
+            text = _("Serwer odrzucił adres lub hasło aplikacji")
+        return f"{text}. {provider.login_hint}" if provider.login_hint else text
 
     def _finish(self, account, password, error):
         if not self or not self.IsModal():

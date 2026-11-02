@@ -91,8 +91,14 @@ class ImapClient:
         except (OSError, imaplib.IMAP4.error):
             pass
 
+    def _list(self):
+        if not self._account.provider.uses_xlist:
+            return self._call(self._imap.list)
+        self._call(self._imap.xatom, "XLIST", '"" "*"')
+        return self._imap.response("XLIST")[1]
+
     def list_folders(self):
-        data = self._call(self._imap.list)
+        data = self._list()
         return [
             replace(folder, unread=self._unread(folder.name))
             for folder in parse_folders(data)
@@ -134,7 +140,7 @@ class ImapClient:
 
     def search_everywhere(self, query):
         """Zwraca pary (folder, wiadomości) z całego konta."""
-        folders = parse_search_folders(self._call(self._imap.list))
+        folders = parse_search_folders(self._list())
         return [(folder, self.search(folder, query)) for folder in folders]
 
     def fetch_message(self, folder, uid):
@@ -158,7 +164,13 @@ class ImapClient:
 
     def move_to_folder(self, folder, uid, target):
         self._call(self._imap.select, quote(folder), False)
-        self._call(self._imap.uid, "MOVE", str(uid), quote(target))
+        if self._account.provider.supports_move:
+            self._call(self._imap.uid, "MOVE", str(uid), quote(target))
+            return
+        # Najpierw kopia: gdy coś się nie uda, wiadomość zostaje na miejscu.
+        self._call(self._imap.uid, "COPY", str(uid), quote(target))
+        self._call(self._imap.uid, "STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
+        self._call(self._imap.uid, "EXPUNGE", str(uid))
 
     def remove_inbox_label(self, uid):
         """Archiwizacja w Gmailu: wiadomość traci etykietę Odebrane."""
@@ -172,7 +184,7 @@ class ImapClient:
 
     def _folder_for_role(self, role):
         if role not in self._role_folders:
-            folders = parse_folders(self._call(self._imap.list))
+            folders = parse_folders(self._list())
             self._role_folders = {f.role: f.name for f in folders if f.role}
         if role not in self._role_folders:
             raise ImapError(f"Brak folderu {role}")

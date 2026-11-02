@@ -23,6 +23,9 @@ Wszystkie trzy konta obsługujemy jednym protokołem: IMAP do odbioru i SMTP do 
 | Gmail 1 | imap.gmail.com:993 (SSL) | smtp.gmail.com:587 (STARTTLS) | hasło aplikacji Google (wymaga weryfikacji dwuetapowej) |
 | Gmail 2 | imap.gmail.com:993 (SSL) | smtp.gmail.com:587 (STARTTLS) | hasło aplikacji Google |
 | iCloud | imap.mail.me.com:993 (SSL) | smtp.mail.me.com:587 (STARTTLS) | hasło aplikacji Apple ID |
+| Interia | poczta.interia.pl:993 (SSL) | poczta.interia.pl:587 (STARTTLS) | zwykłe hasło konta; w ustawieniach poczty trzeba włączyć dostęp dla programów pocztowych |
+
+Interia nie ogłasza polecenia MOVE, więc PT Mail przenosi wiadomość przez kopię, a potem usuwa oryginał. Role folderów bierze z polecenia XLIST. Wysłaną pocztę do folderu Wysłane zapisuje PT Mail.
 
 Stos technologiczny:
 
