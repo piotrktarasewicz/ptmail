@@ -231,7 +231,7 @@ def test_automatic_check_is_silent_without_news(frame):
 
 def test_menu_check_reports_result(frame):
     checked(frame, None, asked=True)
-    assert frame.spoken == ["Masz najnowszą wersję, 0.1.0"]
+    assert frame.spoken == [f"Masz najnowszą wersję, {mf.__version__}"]
     checked(frame, None, failed=True, asked=True)
     assert frame.spoken[-1] == "Nie udało się sprawdzić aktualizacji"
 
