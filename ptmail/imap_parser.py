@@ -165,6 +165,9 @@ def _parse_message(meta, header):
         return None
     flags = FLAGS_RE.search(meta)
     flags = flags.group(1).lower().split() if flags else []
+    if b"\\deleted" in flags:
+        # Oznaczona do usunięcia, gdy serwer nie zdążył jej jeszcze wymazać.
+        return None
     parsed = email.message_from_bytes(header)
     return Message(
         uid=int(uid.group(1)),

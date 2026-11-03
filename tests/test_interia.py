@@ -7,7 +7,7 @@ import wx
 
 from ptmail.accounts import PROVIDERS, Account
 from ptmail.imap_client import ImapClient, ImapError
-from ptmail.imap_parser import parse_folders
+from ptmail.imap_parser import parse_fetch, parse_folders
 from ptmail.ui import account_dialog as ad
 
 INTERIA = Account("Interia", "ja@interia.pl", "interia")
@@ -83,6 +83,23 @@ def test_failed_copy_leaves_message_alone():
     with pytest.raises(ImapError):
         client_for(INTERIA, imap).move_to_folder("INBOX", 5, "Kosz")
     assert ("STORE", "5", "+FLAGS.SILENT", "(\\Deleted)") not in imap.calls
+
+
+def test_failed_expunge_still_counts_as_moved():
+    imap = FakeImap(failing="EXPUNGE")
+    client_for(INTERIA, imap).move_to_folder("INBOX", 5, "Kosz")
+    assert ("STORE", "5", "+FLAGS.SILENT", "(\\Deleted)") in imap.calls
+
+
+def test_message_marked_deleted_is_not_shown():
+    header = b"From: Jan <jan@example.com>\r\nSubject: x\r\n\r\n"
+    data = [
+        (b"1 (UID 5 FLAGS (\\Seen \\Deleted) BODY[HEADER.FIELDS (FROM SUBJECT DATE)] {40}", header),
+        b")",
+        (b"2 (UID 6 FLAGS (\\Seen) BODY[HEADER.FIELDS (FROM SUBJECT DATE)] {40}", header),
+        b")",
+    ]
+    assert [m.uid for m in parse_fetch(data)] == [6]
 
 
 def test_other_providers_still_use_move():

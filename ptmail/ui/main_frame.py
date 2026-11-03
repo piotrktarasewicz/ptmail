@@ -18,9 +18,13 @@ from ..compose import Draft, forward_draft, reply_draft
 from ..config import (
     load_accounts,
     load_hide_on_close,
+    load_new_mail_sound,
+    load_newest_first,
     load_notifications,
     save_accounts,
     save_hide_on_close,
+    save_new_mail_sound,
+    save_newest_first,
     save_notifications,
     save_pending_update,
     take_pending_update,
@@ -33,7 +37,7 @@ from ..idle_watcher import IdleWatcher
 from ..mail_worker import INBOX, MailWorker
 from ..message_parser import link_host, parse_message
 from ..notifications import notify
-from ..sounds import ATTENTION, FAILURE, NEW_MAIL, SYNCED, beep, play
+from ..sounds import ATTENTION, FAILURE, NEW_MAIL, SYNCED, beep, play, play_file
 from ..speech import speak
 from .account_dialog import AccountDialog
 from .accounts_dialog import AccountsDialog
@@ -42,6 +46,7 @@ from .list_view import ListView
 from .message_view import MessageView
 from .move_dialog import MoveDialog
 from .search_dialog import SearchDialog
+from .sound_dialog import SoundDialog
 from .tray import TrayIcon
 from .update_dialog import UpdateDialog
 
@@ -110,6 +115,8 @@ class MainFrame(wx.Frame):
         self._last_everywhere = False
         self._notifications = load_notifications()
         self._hide_on_close = load_hide_on_close()
+        self._newest_first = load_newest_first()
+        self._new_mail_sound = load_new_mail_sound()
         self._tray = None
         self._update = None
         self._declined_update = None
@@ -152,12 +159,28 @@ class MainFrame(wx.Frame):
             wx.ID_ANY, _("Alt+F4 &chowa do zasobnika")
         )
         hide_on_close.Check(self._hide_on_close)
+        sound = menu.Append(wx.ID_ANY, _("&Dźwięk nowej wiadomości…"))
         update = menu.Append(wx.ID_ANY, _("Sprawdź &aktualizacje…"))
         menu.AppendSeparator()
         close = menu.Append(wx.ID_EXIT, _("&Zakończ\tCtrl+Q"))
+        view = wx.Menu()
+        newest = view.AppendRadioItem(wx.ID_ANY, _("Od &najnowszych"))
+        oldest = view.AppendRadioItem(wx.ID_ANY, _("Od n&ajstarszych"))
+        (newest if self._newest_first else oldest).Check()
+        view.AppendSeparator()
+        reverse = view.Append(wx.ID_ANY, _("&Odwróć kolejność\tCtrl+Shift+O"))
+        self._order_items = (newest, oldest)
         bar = wx.MenuBar()
         bar.Append(menu, _("&Plik"))
+        bar.Append(view, _("&Widok"))
         self.SetMenuBar(bar)
+        self.Bind(wx.EVT_MENU, lambda _event: self._set_newest_first(True), newest)
+        self.Bind(wx.EVT_MENU, lambda _event: self._set_newest_first(False), oldest)
+        self.Bind(
+            wx.EVT_MENU,
+            lambda _event: self._set_newest_first(not self._newest_first),
+            reverse,
+        )
         self.Bind(wx.EVT_MENU, lambda _event: self._manage_accounts(), accounts)
         self.Bind(wx.EVT_MENU, lambda _event: self._check_mail(), check)
         self.Bind(wx.EVT_MENU, lambda _event: self._open_search(), search)
@@ -171,6 +194,7 @@ class MainFrame(wx.Frame):
             lambda event: self._set_hide_on_close(event.IsChecked()),
             hide_on_close,
         )
+        self.Bind(wx.EVT_MENU, lambda _event: self._choose_sound(), sound)
         self.Bind(
             wx.EVT_MENU, lambda _event: self._check_for_update(asked=True), update
         )
@@ -183,6 +207,28 @@ class MainFrame(wx.Frame):
     def _set_hide_on_close(self, enabled):
         self._hide_on_close = enabled
         save_hide_on_close(enabled)
+
+    def _choose_sound(self):
+        with SoundDialog(self, self._new_mail_sound) as dialog:
+            if dialog.ShowModal() != wx.ID_OK:
+                return
+            path = dialog.sound_path
+        self._new_mail_sound = path
+        save_new_mail_sound(path)
+        self._say_after_focus(_("Zapisano"))
+
+    def _play_new_mail(self):
+        # Gdy własnego pliku już nie ma, nowa poczta i tak nie przyjdzie po cichu.
+        if self._new_mail_sound is None or not play_file(self._new_mail_sound):
+            play(NEW_MAIL)
+
+    def _set_newest_first(self, enabled):
+        """Zmienia kolejność wszystkich list, a zaznaczenie zostaje na tej samej wiadomości."""
+        self._newest_first = enabled
+        save_newest_first(enabled)
+        self._order_items[0 if enabled else 1].Check()
+        self._show_message_rows()
+        self._say(_("Od najnowszych") if enabled else _("Od najstarszych"))
 
     def _start(self):
         clear_temp()
@@ -386,7 +432,7 @@ class MainFrame(wx.Frame):
                 self._messages[(email, folder)] = messages
         self._show_mailbox_rows()
         self._show_message_rows()
-        self._select_top_message()
+        self._select_newest_message()
 
     def _start_session(self, account):
         password = get_password(account)
@@ -427,6 +473,11 @@ class MainFrame(wx.Frame):
         return folder == INBOX if target is None else target == (email, folder)
 
     def _visible_messages(self):
+        """Wiadomości bieżącej skrzynki w kolejności wybranej w menu Widok."""
+        messages = self._visible_newest_first()
+        return messages if self._newest_first else messages[::-1]
+
+    def _visible_newest_first(self):
         if self._mailbox_key == SEARCH_KEY:
             return self._search_results
         target = self._target()
@@ -438,6 +489,10 @@ class MainFrame(wx.Frame):
             for message in self._messages.get((account.email, INBOX), [])
         ]
         return sorted(merged, key=_newest_first, reverse=True)
+
+    def _newest_visible_key(self):
+        messages = self._visible_newest_first()
+        return messages[0].key if messages else None
 
     def _account_for(self, email):
         return next(a for a in self._accounts if a.email == email)
@@ -482,19 +537,21 @@ class MainFrame(wx.Frame):
         # Pobranie mogło wyruszyć, zanim serwer dostał polecenie usunięcia.
         messages = [m for m in tagged if m.key not in self._removed]
         visible = self._is_visible(email, folder)
-        rows = self._visible_messages() if visible else []
-        at_top = not rows or self._message_list.selected_key() == rows[0].key
+        newest_key = self._newest_visible_key() if visible else None
+        at_newest = (
+            newest_key is None or self._message_list.selected_key() == newest_key
+        )
         self._messages[key] = messages
         self._cache.save_messages(email, folder, messages)
         self.SetStatusText("")
         if visible:
             self._show_message_rows()
-            if self._initial_load and at_top:
-                self._select_top_message()
+            if self._initial_load and at_newest:
+                self._select_newest_message()
         if refreshed:
             newest = _newest_new_message(previous, messages)
             if newest is not None:
-                play(NEW_MAIL)
+                self._play_new_mail()
                 self._sync_clean = False
                 # Przy starcie o zaznaczeniu decyduje najnowsza ze wszystkich kont.
                 if visible and not self._initial_load:
@@ -514,10 +571,11 @@ class MainFrame(wx.Frame):
         # Pytamy aplikację, bo przy otwartym oknie pisania nieaktywna jest tylko ramka.
         return not self.IsShown() or not wx.GetApp().IsActive()
 
-    def _select_top_message(self):
-        rows = self._visible_messages()
-        if rows:
-            self._message_list.select_key(rows[0].key)
+    def _select_newest_message(self):
+        """Najnowsza wiadomość jest na górze albo na dole listy, zależnie od kolejności."""
+        newest_key = self._newest_visible_key()
+        if newest_key is not None:
+            self._message_list.select_key(newest_key)
 
     def _finish_sync(self, email):
         """Jeden dźwięk za całe pobranie, także gdy kont jest kilka."""
@@ -605,7 +663,9 @@ class MainFrame(wx.Frame):
             [
                 (m.key, message_sentence(m, self._row_account_name(m)))
                 for m in self._visible_messages()
-            ]
+            ],
+            # Nowo otwarta lista zaczyna od najnowszej wiadomości.
+            fallback=self._newest_visible_key(),
         )
 
     def _inbox_unread(self, email):
@@ -827,7 +887,7 @@ class MainFrame(wx.Frame):
         self._search_results = found
         self._update_title()
         self._show_message_rows()
-        self._select_top_message()
+        self._select_newest_message()
         self._show_view(self._message_list)
         parts.append(found_text(len(found)))
         parts.append(message_sentence(found[0], self._row_account_name(found[0])))

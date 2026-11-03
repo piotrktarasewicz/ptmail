@@ -21,8 +21,11 @@ class ListView(wx.Panel):
     def focus(self):
         self.list.SetFocus()
 
-    def set_rows(self, rows):
-        """Podmienia wiersze (klucz, tekst), zostawiając zaznaczenie na tym samym kluczu."""
+    def set_rows(self, rows, fallback=None):
+        """Podmienia wiersze (klucz, tekst), zostawiając zaznaczenie na tym samym kluczu.
+
+        Gdy zaznaczonego klucza już nie ma, zaznacza fallback, a bez niego pierwszy wiersz.
+        """
         keys = [key for key, _text in rows]
         texts = [text for _key, text in rows]
         if keys == self._keys:
@@ -37,7 +40,7 @@ class ListView(wx.Panel):
         self._texts = texts
         self.list.Set(texts)
         if keys:
-            self.select_key(selected)
+            self.select_key(selected if selected in keys else fallback)
 
     def selected_key(self):
         index = self.list.GetSelection()

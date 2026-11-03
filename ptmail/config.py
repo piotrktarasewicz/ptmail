@@ -90,3 +90,25 @@ def load_hide_on_close():
 
 def save_hide_on_close(enabled):
     _save_flag("hide_on_close", enabled)
+
+
+def load_new_mail_sound():
+    """Ścieżka własnego dźwięku nowej wiadomości albo None dla wbudowanego."""
+    return _read().get("new_mail_sound")
+
+
+def save_new_mail_sound(path):
+    data = _read()
+    if path is None:
+        data.pop("new_mail_sound", None)
+    else:
+        data["new_mail_sound"] = path
+    _write(data)
+
+
+def load_newest_first():
+    return _load_flag("newest_first")
+
+
+def save_newest_first(enabled):
+    _save_flag("newest_first", enabled)

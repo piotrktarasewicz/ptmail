@@ -1,6 +1,7 @@
 """Krótkie dźwięki programu. Tony powstają w kodzie, więc repozytorium nie ma plików audio."""
 
 import array
+import ctypes
 import io
 import math
 import wave
@@ -21,6 +22,8 @@ TONES = {
 # Dźwięki systemowe Windows, takie same jak w oknach innych programów.
 ATTENTION = winsound.MB_ICONASTERISK
 FAILURE = winsound.MB_ICONHAND
+SOUND_WILDCARD = "*.mp3;*.wav"
+MCI_ALIAS = "ptmail_sound"
 
 
 def build_wav(tones):
@@ -65,3 +68,22 @@ def play(name):
         )
     except (OSError, RuntimeError):
         pass
+
+
+def _mci(command):
+    return ctypes.windll.winmm.mciSendStringW(command, None, 0, None)
+
+
+def play_file(path):
+    """Odtwarza plik MP3 lub WAV wybrany przez użytkownika. Zwraca False, gdy się nie da.
+
+    MCI jest częścią Windows, więc MP3 nie wymaga dodatkowej biblioteki. Wywoływać
+    tylko z wątku interfejsu, bo urządzenie MCI należy do wątku, który je otworzył.
+    """
+    _mci(f"close {MCI_ALIAS}")
+    if _mci(f'open "{path}" type mpegvideo alias {MCI_ALIAS}') != 0:
+        return False
+    if _mci(f"play {MCI_ALIAS}") != 0:
+        _mci(f"close {MCI_ALIAS}")
+        return False
+    return True

@@ -62,6 +62,11 @@ class ImapClient:
     def connected(self):
         return self._imap is not None
 
+    @property
+    def capabilities(self):
+        """Możliwości serwera po zalogowaniu, do dziennika przy usterkach."""
+        return " ".join(self._imap.capabilities) if self._imap is not None else ""
+
     def connect(self):
         provider = self._account.provider
         try:
@@ -170,7 +175,14 @@ class ImapClient:
         # Najpierw kopia: gdy coś się nie uda, wiadomość zostaje na miejscu.
         self._call(self._imap.uid, "COPY", str(uid), quote(target))
         self._call(self._imap.uid, "STORE", str(uid), "+FLAGS.SILENT", "(\\Deleted)")
-        self._call(self._imap.uid, "EXPUNGE", str(uid))
+        try:
+            self._call(self._imap.uid, "EXPUNGE", str(uid))
+        except ImapConnectionError:
+            raise
+        except ImapError:
+            # Kopia już jest na miejscu, a oznaczonej wiadomości program nie pokazuje.
+            # Serwer wymaże ją sam, np. przy wylogowaniu.
+            pass
 
     def remove_inbox_label(self, uid):
         """Archiwizacja w Gmailu: wiadomość traci etykietę Odebrane."""

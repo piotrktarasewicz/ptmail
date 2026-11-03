@@ -137,7 +137,8 @@ class MailWorker(threading.Thread):
         """Obsługuje żądanie. Zwraca je z powrotem, gdy trzeba ponowić próbę."""
         try:
             self._sync(request)
-        except ImapConnectionError:
+        except ImapConnectionError as error:
+            self._log("Pobieranie poczty", error)
             self._client.close()
             self._report(
                 _("Brak połączenia z {name}, spróbuję ponownie").format(
@@ -145,14 +146,16 @@ class MailWorker(threading.Thread):
                 )
             )
             return request
-        except ImapAuthError:
+        except ImapAuthError as error:
+            self._log("Logowanie", error)
             self._client.close()
             self._report(
                 _("Logowanie do {name} nie powiodło się").format(
                     name=self.account.name
                 )
             )
-        except ImapError:
+        except ImapError as error:
+            self._log("Pobieranie poczty", error)
             self._report(_("Nie udało się pobrać poczty z {name}").format(
                 name=self.account.name
             ))
@@ -177,7 +180,8 @@ class MailWorker(threading.Thread):
             raw = self._with_client(
                 self._client.fetch_message, request.folder, request.uid
             )
-        except ImapError:
+        except ImapError as error:
+            self._log("Otwieranie wiadomości", error)
             self._client.close()
             self._emit(self._listener.on_open_failed, request.folder, request.uid)
             return
@@ -218,7 +222,8 @@ class MailWorker(threading.Thread):
     def _perform(self, request):
         try:
             self._with_client(request.run, self._client)
-        except ImapError:
+        except ImapError as error:
+            self._log("Czynność na wiadomości", error)
             self._client.close()
             self._emit(self._listener.on_action_failed, request.failure_text)
 
@@ -273,6 +278,17 @@ class MailWorker(threading.Thread):
             self._client.close()
             self._client.connect()
             return action(*args)
+
+    def _log(self, what, error):
+        """Zapisuje odpowiedź serwera bez treści poczty, żeby dało się znaleźć usterkę."""
+        logger.warning(
+            "%s, %s: %s: %s [%s]",
+            what,
+            self.account.provider.key,
+            type(error).__name__,
+            error,
+            self._client.capabilities,
+        )
 
     def _report(self, text):
         if not self._error_reported:

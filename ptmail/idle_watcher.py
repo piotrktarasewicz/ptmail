@@ -1,12 +1,15 @@
+import logging
 import threading
 
-from .imap_client import ImapClient, ImapConnectionError, ImapError
+from .imap_client import ImapAuthError, ImapClient, ImapConnectionError, ImapError
 
+logger = logging.getLogger(__name__)
 INBOX = "INBOX"
 # Serwery zrywają IDLE po mniej niż 30 minutach, a częstsze wznawianie szybciej
 # wykrywa martwe połączenie, np. po uśpieniu komputera.
 IDLE_SECONDS = 9 * 60
 RECONNECT_SECONDS = 60
+POLL_SECONDS = 3 * 60
 
 
 class IdleWatcher(threading.Thread):
@@ -38,12 +41,28 @@ class IdleWatcher(threading.Thread):
                 self._watch(client)
             except ImapConnectionError:
                 reconnecting = True
-            except ImapError:
-                # Złe hasło albo brak IDLE: ponawianie niczego nie zmieni.
+            except ImapAuthError:
+                # Złe hasło: ponawianie niczego nie zmieni, a mogłoby zablokować konto.
                 return
+            except ImapError as error:
+                logger.warning(
+                    "IDLE, %s: %s [%s]",
+                    self._account.provider.key,
+                    error,
+                    client.capabilities,
+                )
+                break
             finally:
                 client.close()
             self._stopped.wait(RECONNECT_SECONDS)
+        else:
+            return
+        self._poll()
+
+    def _poll(self):
+        """Serwer odrzucił IDLE, więc co kilka minut po prostu sprawdzamy Odebrane."""
+        while not self._stopped.wait(POLL_SECONDS):
+            self._on_new_mail()
 
     def _watch(self, client):
         while not self._stopped.is_set():

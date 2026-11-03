@@ -45,12 +45,12 @@ Program ma trzy poziomy, przez które chodzi się jak po drzewie: Enter idzie w 
    - Wszystkie skrzynki: wspólna skrzynka odbiorcza trzech kont, zawsze pierwsza na liście.
    - Poniżej każde konto z nazwą nadaną przez użytkownika (Enter otwiera jego Odebrane), a pod nim jego foldery: Odebrane, Wysłane, Robocze, Kosz, własne foldery. Wiersz folderu kończy nazwa konta, np. „Odebrane, 2 nieprzeczytane, iCloud”.
    - Przy każdej pozycji liczba nieprzeczytanych, np. „Wszystkie skrzynki, 3 nieprzeczytane”.
-2. **Lista wiadomości** wybranej skrzynki, od najnowszej.
+2. **Lista wiadomości** wybranej skrzynki, domyślnie od najnowszej. Menu Widok pozwala ustawić kolejność od najstarszej, a Ctrl+Shift+O ją odwraca. Wybór obowiązuje we wszystkich skrzynkach i wynikach wyszukiwania i zostaje po ponownym uruchomieniu. Przy zmianie NVDA mówi „Od najnowszych” albo „Od najstarszych”, a zaznaczenie zostaje na tej samej wiadomości.
 3. **Wiadomość**: treść, a na dole załączniki.
 
 Okno pisania wiadomości to osobne okno, otwierane z dowolnego poziomu. Po wysłaniu lub anulowaniu fokus wraca dokładnie tam, gdzie był.
 
-Program startuje od razu na liście wiadomości ze Wszystkich skrzynek, na najnowszej wiadomości. Escape z listy przenosi do ekranu Skrzynki.
+Program startuje od razu na liście wiadomości ze Wszystkich skrzynek, na najnowszej wiadomości. Każda otwierana skrzynka też zaczyna od najnowszej, czyli przy kolejności od najstarszych od ostatniego wiersza. Escape z listy przenosi do ekranu Skrzynki.
 
 ## Lista wiadomości
 
@@ -79,8 +79,9 @@ Czynności na zaznaczonej wiadomości (odpowiednik pokrętła czynności VoiceOv
 | Ctrl+N | nowa wiadomość |
 | F5 | sprawdź pocztę teraz |
 | Ctrl+F | szukaj, działa też na ekranie Skrzynki |
+| Ctrl+Shift+O | odwróć kolejność: od najnowszych / od najstarszych |
 
-Klawisz aplikacji (lub Shift+F10) otwiera menu z tymi samymi czynnościami, a przy każdej pozycji jest jej skrót. Po usunięciu lub archiwizacji fokus przechodzi na następną wiadomość i NVDA od razu ją czyta; gdy starszej nie ma, na poprzednią.
+Klawisz aplikacji (lub Shift+F10) otwiera menu z tymi samymi czynnościami, a przy każdej pozycji jest jej skrót. Po usunięciu lub archiwizacji fokus przechodzi na następną wiadomość (wiersz niżej) i NVDA od razu ją czyta; gdy niżej nic nie ma, na poprzednią.
 
 Delete, Ctrl+Shift+A, Ctrl+M, Ctrl+U i Ctrl+Shift+F działają też w widoku wiadomości. Usunięcie, archiwizacja lub przeniesienie wraca wtedy na listę, na następną wiadomość.
 
@@ -144,8 +145,8 @@ Przekazanie dalej zachowuje oryginalne załączniki. Wysłana wiadomość trafia
 Fokus nie skacze sam. Zmienia się po działaniu użytkownika, zawsze w przewidywalne miejsce, a jedynym wyjątkiem jest nowa wiadomość na widocznej liście.
 
 - Powrót Escape'em zawsze na ten sam element, z którego się weszło.
-- Nowa wiadomość dopisuje się na górze, a zaznaczenie przechodzi na najnowszą i NVDA ją czyta. Dotyczy to tylko widocznej listy wiadomości: czytanie treści i pisanie nie są przerywane, a gdy program jest w tle, zaznaczenie przechodzi po cichu.
-- Pobranie poczty na żądanie (start, F5) kończy krótki dźwięk, a nowa poczta ma własny, dwutonowy. Automatyczne odświeżenie bez nowej poczty jest ciche. Brak paska postępu czytanego przez NVDA.
+- Nowa wiadomość dopisuje się na górze listy (przy kolejności od najstarszych na dole), a zaznaczenie przechodzi na najnowszą i NVDA ją czyta. Dotyczy to tylko widocznej listy wiadomości: czytanie treści i pisanie nie są przerywane, a gdy program jest w tle, zaznaczenie przechodzi po cichu.
+- Pobranie poczty na żądanie (start, F5) kończy krótki dźwięk, a nowa poczta ma własny, dwutonowy, który można zamienić na plik MP3 lub WAV. Automatyczne odświeżenie bez nowej poczty jest ciche. Brak paska postępu czytanego przez NVDA.
 - Komunikaty statusu („Wysłano”, „Przeniesiono do kosza”) mówione przez NVDA jednym słowem lub krótkim zdaniem, bez okien dialogowych.
 - Okno dialogowe tylko wtedy, gdy trzeba podjąć decyzję (np. zapisać szkic). Jedno pytanie, jasne przyciski.
 - Błędy połączenia: jedno krótkie zdanie, np. „Brak połączenia z iCloud, spróbuję ponownie”, i żadnego powtarzania przy kolejnych próbach.
@@ -181,6 +182,9 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 - [x] Instalator dla jednego użytkownika, bez pytania o uprawnienia administratora, z pozycją w menu Start, odinstalowaniem oraz wyborem startu z Windows i skrótu na pulpicie. Dane, konta i hasła zostają przy odinstalowaniu
 - [x] Start z Windows: program od razu chowa się do zasobnika i jest cichy, nie mówi o błędach połączenia ani o udanym pobraniu poczty
 - [x] Aktualizacje z wydań na GitHubie: sprawdzane po starcie i raz na dobę oraz na żądanie z menu Plik. Program pyta o zgodę tylko przy widocznym oknie bez innych otwartych okien. Pytaniu towarzyszy dźwięk systemowy, a gdy program jest w tle, także powiadomienie. Po zgodzie okno z paskiem postępu i przyciskiem Anuluj pobiera instalator, NVDA mówi co 25 procent, a program sprawdza sumę kontrolną. Instalator pokazuje własne okno postępu, po czym program uruchamia się ponownie i mówi „Zaktualizowano do wersji…” albo zgłasza błąd. Błędy mają systemowy dźwięk błędu. Odmowa lub anulowanie obowiązuje do następnego uruchomienia
+- [x] Kolejność listy wiadomości: od najnowszych lub od najstarszych, w menu Widok i pod Ctrl+Shift+O
+- [x] Dźwięk nowej wiadomości do wyboru w menu Plik: wbudowany albo własny plik MP3 lub WAV, z przyciskiem Odtwórz. Pliki odtwarza sam Windows, więc instalator nie rośnie. Gdy pliku nie ma albo nie da się go odtworzyć, gra dźwięk wbudowany
+- [x] Serwer bez działającego IDLE: Odebrane są sprawdzane co 3 minuty. Odpowiedzi serwera przy usterkach trafiają do dziennika ptmail.log (bez treści poczty), a wiadomości oznaczone do usunięcia nie są pokazywane
 
 **Celowo pomijamy:** kalendarz, kontakty, zadania, widok HTML, grupowanie w wątki, filtry i reguły, szyfrowanie, motywy wyglądu.
 

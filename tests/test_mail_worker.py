@@ -8,6 +8,8 @@ RAW = b"From: a@b.pl\r\nSubject: x\r\n\r\ntresc"
 
 
 class FakeClient:
+    capabilities = "IMAP4REV1"
+
     def __init__(self, failures):
         self.failures = failures
         self.connected = False

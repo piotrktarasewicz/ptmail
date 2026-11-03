@@ -112,6 +112,7 @@ class FakeClient:
 
     scripts = []
     instances = []
+    capabilities = "IMAP4REV1"
 
     def __init__(self, account, password):
         self.script = list(FakeClient.scripts.pop(0))
@@ -141,14 +142,21 @@ class FakeClient:
 watcher = None
 
 
-def run_watcher(monkeypatch, scripts):
+def run_watcher(monkeypatch, scripts, stop_after=None):
     global watcher
     FakeClient.scripts = scripts
     FakeClient.instances = []
     monkeypatch.setattr(idle_watcher, "ImapClient", FakeClient)
     monkeypatch.setattr(idle_watcher, "RECONNECT_SECONDS", 0)
+    monkeypatch.setattr(idle_watcher, "POLL_SECONDS", 0.01)
     calls = []
-    watcher = IdleWatcher(ACCOUNT, "x", lambda: calls.append("odswiez"))
+
+    def refresh():
+        calls.append("odswiez")
+        if len(calls) == stop_after:
+            watcher.stop()
+
+    watcher = IdleWatcher(ACCOUNT, "x", refresh)
     watcher.start()
     watcher.join(2)
     assert not watcher.is_alive()
@@ -171,3 +179,10 @@ def test_watcher_gives_up_after_wrong_password(monkeypatch):
     calls = run_watcher(monkeypatch, [[ImapAuthError("x")], []])
     assert calls == []
     assert len(FakeClient.instances) == 1
+
+
+def test_server_without_idle_is_checked_regularly(monkeypatch):
+    calls = run_watcher(monkeypatch, [[ImapError("BAD")]], stop_after=3)
+    assert calls == ["odswiez"] * 3
+    assert len(FakeClient.instances) == 1
+    assert FakeClient.instances[0].closed
