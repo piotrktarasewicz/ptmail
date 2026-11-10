@@ -36,7 +36,7 @@ from ..i18n import _
 from ..idle_watcher import IdleWatcher
 from ..mail_worker import INBOX, MailWorker
 from ..message_parser import link_host, parse_message
-from ..notifications import notify
+from ..notifications import dismiss, notify
 from ..sounds import ATTENTION, FAILURE, NEW_MAIL, SYNCED, beep, play, play_file
 from ..speech import speak
 from .account_dialog import AccountDialog
@@ -1294,6 +1294,9 @@ class MainFrame(wx.Frame):
                 self._leave_search()
             else:
                 self._go_to_mailboxes()
+        elif key == wx.WXK_ESCAPE:
+            # Drugi Escape wraca do skrzynki, z której się wyszło, na tę samą wiadomość.
+            self._show_view(self._message_list)
         elif key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
             if self._mailbox_view.IsShown():
                 self._open_selected_mailbox()
@@ -1343,7 +1346,10 @@ class MainFrame(wx.Frame):
             self._tray = None
         self._stop_sessions()
         self._cache.close()
+        dismiss()
         event.Skip()
+        # Ukryte okna, np. po powiadomieniach, nie mogą zatrzymać końca programu.
+        wx.GetApp().ExitMainLoop()
 
     def _stop_sessions(self):
         for worker in self._workers.values():

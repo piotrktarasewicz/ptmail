@@ -34,3 +34,11 @@ def notify(title, text):
     global _shown
     _shown = wx.adv.NotificationMessage(title, text)
     _shown.Show()
+
+
+def dismiss():
+    """Zamyka ostatnie powiadomienie. Jego ukryte okno trzymałoby program przy życiu."""
+    global _shown
+    if _shown is not None:
+        _shown.Close()
+        _shown = None

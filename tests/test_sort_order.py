@@ -161,3 +161,23 @@ def test_deleting_moves_to_next_row_below(oldest):
     oldest._move_to_trash()
     assert shown_uids(oldest) == [2, 3]
     assert oldest._message_list.selected_key() == ref(2)
+
+
+def press_escape(window):
+    event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+    event.SetKeyCode(wx.WXK_ESCAPE)
+    window._on_key(event)
+
+
+def test_second_escape_returns_to_same_mailbox_and_message(frame):
+    load(frame, 3, 2, 1)
+    frame._message_list.select_key(ref(2))
+    press_escape(frame)
+    assert frame._mailbox_view.IsShown()
+    # Strzałki na liście skrzynek nie zmieniają skrzynki, do której wraca Escape.
+    frame._show_mailbox_rows()
+    frame._mailbox_view.select_key((EMAIL, None))
+    press_escape(frame)
+    assert frame._message_list.IsShown()
+    assert frame._mailbox_key == mf.ALL_KEY
+    assert frame._message_list.selected_key() == ref(2)

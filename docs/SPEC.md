@@ -50,7 +50,7 @@ Program ma trzy poziomy, przez które chodzi się jak po drzewie: Enter idzie w 
 
 Okno pisania wiadomości to osobne okno, otwierane z dowolnego poziomu. Po wysłaniu lub anulowaniu fokus wraca dokładnie tam, gdzie był.
 
-Program startuje od razu na liście wiadomości ze Wszystkich skrzynek, na najnowszej wiadomości. Każda otwierana skrzynka też zaczyna od najnowszej, czyli przy kolejności od najstarszych od ostatniego wiersza. Escape z listy przenosi do ekranu Skrzynki.
+Program startuje od razu na liście wiadomości ze Wszystkich skrzynek, na najnowszej wiadomości. Każda otwierana skrzynka też zaczyna od najnowszej, czyli przy kolejności od najstarszych od ostatniego wiersza. Escape z listy przenosi do ekranu Skrzynki, a ponowny Escape wraca do skrzynki, z której się wyszło, na tę samą wiadomość.
 
 ## Lista wiadomości
 

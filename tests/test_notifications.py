@@ -54,3 +54,24 @@ def test_registry_failure_does_not_stop_the_program(monkeypatch):
     monkeypatch.setattr(notifications.winreg, "CreateKey", refuse)
     notifications.register_app()
     assert ids == []
+
+
+class FakeNotification:
+    def __init__(self, title, text):
+        self.closed = False
+
+    def Show(self):
+        pass
+
+    def Close(self):
+        self.closed = True
+
+
+def test_dismiss_closes_last_notification(monkeypatch):
+    monkeypatch.setattr(notifications.wx.adv, "NotificationMessage", FakeNotification)
+    notifications.notify("Nowa wiadomość od Jan", "temat")
+    shown = notifications._shown
+    notifications.dismiss()
+    assert shown.closed
+    assert notifications._shown is None
+    notifications.dismiss()
