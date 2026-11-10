@@ -131,8 +131,7 @@ def test_new_message_goes_to_bottom_and_takes_selection(oldest):
 
 def test_opened_folder_starts_at_newest(oldest):
     load(oldest, 1)
-    oldest._folders[EMAIL] = []
-    oldest._mailbox_view.set_rows([((EMAIL, SENT), "Wysłane")])
+    oldest._mailbox_view.set_nodes([((EMAIL, SENT), "Wysłane", [])])
     oldest._mailbox_view.select_key((EMAIL, SENT))
     oldest._open_selected_mailbox()
     load(oldest, 9, 8, 7, refreshed=False, folder=SENT)

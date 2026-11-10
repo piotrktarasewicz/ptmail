@@ -128,19 +128,18 @@ def test_same_uid_on_two_accounts_are_separate_messages(frame):
     assert (WORK.email, "INBOX", 1) in keys and (ICLOUD.email, "INBOX", 1) in keys
 
 
-def test_mailboxes_list_accounts_and_folders(frame):
-    box = frame._mailbox_view.list
-    assert [box.GetString(i) for i in range(box.GetCount())] == [
-        "Wszystkie skrzynki, 6 nieprzeczytanych",
-        "Prywatny, 1 nieprzeczytana",
-        "Odebrane, 1 nieprzeczytana, Prywatny",
-        "Kosz, Prywatny",
-        "Praca, 2 nieprzeczytane",
-        "Odebrane, 2 nieprzeczytane, Praca",
-        "Kosz, Praca",
-        "iCloud, 3 nieprzeczytane",
-        "Odebrane, 3 nieprzeczytane, iCloud",
-        "Kosz, iCloud",
+def test_mailboxes_are_a_tree_of_accounts_and_folders(frame):
+    assert frame._mailbox_view.texts() == [
+        (0, "Wszystkie skrzynki, 6 nieprzeczytanych"),
+        (0, "Prywatny, 1 nieprzeczytana"),
+        (1, "Odebrane, 1 nieprzeczytana"),
+        (1, "Kosz"),
+        (0, "Praca, 2 nieprzeczytane"),
+        (1, "Odebrane, 2 nieprzeczytane"),
+        (1, "Kosz"),
+        (0, "iCloud, 3 nieprzeczytane"),
+        (1, "Odebrane, 3 nieprzeczytane"),
+        (1, "Kosz"),
     ]
 
 
@@ -230,7 +229,7 @@ def test_delete_goes_to_message_account_and_next_row_from_another(frame):
     assert frame._workers[WORK.email].client.calls == [("move", "INBOX", 1, "trash")]
     assert frame._workers[ICLOUD.email].client.calls == []
     assert frame._message_list.selected_key() == (ICLOUD.email, "INBOX", 1)
-    assert frame._mailbox_view.list.GetString(0).startswith("Wszystkie skrzynki, 5")
+    assert frame._mailbox_view.texts()[0][1].startswith("Wszystkie skrzynki, 5")
 
 
 def test_archive_follows_rules_of_message_account(frame):

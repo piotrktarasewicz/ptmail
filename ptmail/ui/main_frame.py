@@ -17,11 +17,13 @@ from ..cache import MailCache, open_cache
 from ..compose import Draft, forward_draft, reply_draft
 from ..config import (
     load_accounts,
+    load_expanded_accounts,
     load_hide_on_close,
     load_new_mail_sound,
     load_newest_first,
     load_notifications,
     save_accounts,
+    save_expanded_accounts,
     save_hide_on_close,
     save_new_mail_sound,
     save_newest_first,
@@ -48,6 +50,7 @@ from .move_dialog import MoveDialog
 from .search_dialog import SearchDialog
 from .sound_dialog import SoundDialog
 from .tray import TrayIcon
+from .tree_view import TreeView
 from .update_dialog import UpdateDialog
 
 ALL_KEY = "all"
@@ -126,7 +129,9 @@ class MainFrame(wx.Frame):
         self.CreateStatusBar()
         panel = wx.Panel(self)
         self._message_list = ListView(panel, _("Wiadomości"))
-        self._mailbox_view = ListView(panel, _("Skrzynki"))
+        self._mailbox_view = TreeView(
+            panel, _("Skrzynki"), self._save_expanded_accounts
+        )
         self._message_view = MessageView(panel)
         self._views = (self._message_list, self._mailbox_view, self._message_view)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -203,6 +208,11 @@ class MainFrame(wx.Frame):
     def _set_notifications(self, enabled):
         self._notifications = enabled
         save_notifications(enabled)
+
+    def _save_expanded_accounts(self, keys):
+        # Konto bez wczytanych jeszcze folderów nie ma gałęzi, więc zostaje jak było.
+        waiting = [e for e in load_expanded_accounts() if not self._folders.get(e)]
+        save_expanded_accounts(waiting + [email for email, folder in keys if folder is None])
 
     def _set_hide_on_close(self, enabled):
         self._hide_on_close = enabled
@@ -675,17 +685,18 @@ class MainFrame(wx.Frame):
         total = sum(self._inbox_unread(a.email) for a in self._accounts)
         if self._tray is not None:
             self._tray.show_unread(total)
-        rows = [(ALL_KEY, mailbox_sentence(_("Wszystkie skrzynki"), total))]
+        # Folder nie podaje nazwy konta, bo pokazuje ją gałąź, w której leży.
+        nodes = [(ALL_KEY, mailbox_sentence(_("Wszystkie skrzynki"), total), [])]
         for account in self._accounts:
             email = account.email
-            rows.append(
-                ((email, None), mailbox_sentence(account.name, self._inbox_unread(email)))
-            )
-            rows += [
-                ((email, f.name), mailbox_sentence(f.label, f.unread, account.name))
+            folders = [
+                ((email, f.name), mailbox_sentence(f.label, f.unread), [])
                 for f in self._folders.get(email, [])
             ]
-        self._mailbox_view.set_rows(rows)
+            label = mailbox_sentence(account.name, self._inbox_unread(email))
+            nodes.append(((email, None), label, folders))
+        expanded = [(email, None) for email in load_expanded_accounts()]
+        self._mailbox_view.set_nodes(nodes, expanded)
 
     def _message_lists(self, key):
         """Listy z tą wiadomością: jej folder i wyniki wyszukiwania."""

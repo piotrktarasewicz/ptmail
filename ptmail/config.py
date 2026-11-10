@@ -112,3 +112,14 @@ def load_newest_first():
 
 def save_newest_first(enabled):
     _save_flag("newest_first", enabled)
+
+
+def load_expanded_accounts():
+    """Adresy kont rozwiniętych w drzewie skrzynek. Na początku wszystkie są zwinięte."""
+    return list(_read().get("expanded_accounts", []))
+
+
+def save_expanded_accounts(emails):
+    data = _read()
+    data["expanded_accounts"] = list(emails)
+    _write(data)

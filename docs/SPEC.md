@@ -43,7 +43,8 @@ Program ma trzy poziomy, przez które chodzi się jak po drzewie: Enter idzie w 
 
 1. **Skrzynki** (ekran startowy)
    - Wszystkie skrzynki: wspólna skrzynka odbiorcza trzech kont, zawsze pierwsza na liście.
-   - Poniżej każde konto z nazwą nadaną przez użytkownika (Enter otwiera jego Odebrane), a pod nim jego foldery: Odebrane, Wysłane, Robocze, Kosz, własne foldery. Wiersz folderu kończy nazwa konta, np. „Odebrane, 2 nieprzeczytane, iCloud”.
+   - Poniżej każde konto z nazwą nadaną przez użytkownika (Enter otwiera jego Odebrane), a pod nim jego foldery: Odebrane, Wysłane, Robocze, Kosz, własne foldery.
+   - Skrzynki są drzewem Windows: strzałka w prawo rozwija konto, w lewo je zwija, a na folderze wraca do jego konta. Enter na folderze go otwiera. Wiersz folderu nie podaje konta, bo NVDA czyta poziom, np. „Odebrane, 2 nieprzeczytane”. Na początku konta są zwinięte, a program pamięta, które rozwinięto. Powrót Escape'em z folderu w zwiniętym koncie rozwija je, żeby zaznaczenie było widoczne.
    - Przy każdej pozycji liczba nieprzeczytanych, np. „Wszystkie skrzynki, 3 nieprzeczytane”.
 2. **Lista wiadomości** wybranej skrzynki, domyślnie od najnowszej. Menu Widok pozwala ustawić kolejność od najstarszej, a Ctrl+Shift+O ją odwraca. Wybór obowiązuje we wszystkich skrzynkach i wynikach wyszukiwania i zostaje po ponownym uruchomieniu. Przy zmianie NVDA mówi „Od najnowszych” albo „Od najstarszych”, a zaznaczenie zostaje na tej samej wiadomości.
 3. **Wiadomość**: treść, a na dole załączniki.
@@ -183,6 +184,7 @@ Pierwsza używalna wersja (etap 1) ma zastąpić Thunderbirda w codziennym czyta
 - [x] Start z Windows: program od razu chowa się do zasobnika i jest cichy, nie mówi o błędach połączenia ani o udanym pobraniu poczty
 - [x] Aktualizacje z wydań na GitHubie: sprawdzane po starcie i raz na dobę oraz na żądanie z menu Plik. Program pyta o zgodę tylko przy widocznym oknie bez innych otwartych okien. Pytaniu towarzyszy dźwięk systemowy, a gdy program jest w tle, także powiadomienie. Po zgodzie okno z paskiem postępu i przyciskiem Anuluj pobiera instalator, NVDA mówi co 25 procent, a program sprawdza sumę kontrolną. Instalator pokazuje własne okno postępu, po czym program uruchamia się ponownie i mówi „Zaktualizowano do wersji…” albo zgłasza błąd. Błędy mają systemowy dźwięk błędu. Odmowa lub anulowanie obowiązuje do następnego uruchomienia
 - [x] Kolejność listy wiadomości: od najnowszych lub od najstarszych, w menu Widok i pod Ctrl+Shift+O
+- [x] Ekran Skrzynki jako drzewo z rozwijanymi kontami
 - [x] Dźwięk nowej wiadomości do wyboru w menu Plik: wbudowany albo własny plik MP3 lub WAV, z przyciskiem Odtwórz. Pliki odtwarza sam Windows, więc instalator nie rośnie. Gdy pliku nie ma albo nie da się go odtworzyć, gra dźwięk wbudowany
 - [x] Serwer bez działającego IDLE: Odebrane są sprawdzane co 3 minuty. Odpowiedzi serwera przy usterkach trafiają do dziennika ptmail.log (bez treści poczty), a wiadomości oznaczone do usunięcia nie są pokazywane
 
