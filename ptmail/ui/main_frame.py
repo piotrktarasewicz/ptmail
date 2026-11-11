@@ -59,6 +59,9 @@ OPENED_CACHE_SIZE = 30
 SEARCH_RESULT_LIMIT = 200
 AFTER_FOCUS_SPEECH_DELAY_MS = 300
 STARTUP_SPEECH_DELAY_MS = 2000
+# Przy starcie NVDA zauważa nowe okno z opóźnieniem i zbiera wszystkie zgłoszenia z listy
+# naraz, czytając pierwszą wiadomość kilka razy. Wiersz dostaje fokus dopiero po tym czasie.
+STARTUP_ROW_FOCUS_DELAY_MS = 1000
 UPDATE_CHECK_DELAY_MS = 5000
 UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 UPDATE_RETRY_MS = 5000
@@ -246,6 +249,7 @@ class MainFrame(wx.Frame):
         self._tray = TrayIcon(self.show_window, self._check_mail, self.quit)
         accounts = load_accounts()
         if accounts:
+            self._message_list.hold_row_focus(STARTUP_ROW_FOCUS_DELAY_MS)
             self._connect(accounts)
         else:
             self.show_window()
@@ -604,9 +608,9 @@ class MainFrame(wx.Frame):
             or self._search_dialog is not None
         ):
             return
+        # NVDA sam czyta wiersz, na który przeszło zaznaczenie. Własny komunikat
+        # sprawiał, że słychać go było kilka razy.
         self._message_list.select_key(message.key)
-        if self.IsActive() and self.IsShown():
-            speak(message_sentence(message, self._row_account_name(message)))
 
     def on_error(self, email, text):
         if not self.IsShown():
@@ -625,11 +629,12 @@ class MainFrame(wx.Frame):
         key = (email, folder, uid)
         self._remember_content(key, content)
         self._cache.save_body(key, raw)
-        self._mark_seen(key)
         pending = self._pending_open
         if pending is not None and pending[0] == key:
             self._pending_open = None
             pending[1](content)
+        # Dopiero po otwarciu: zmiana wiersza na widocznej liście NVDA czytałby przed treścią.
+        self._mark_seen(key)
 
     def _remember_content(self, key, content):
         self._opened[key] = content
@@ -782,8 +787,8 @@ class MainFrame(wx.Frame):
         content = self._known_content(message)
         if content is not None:
             self._pending_open = None
-            self._mark_read_on_server(message)
             action(content)
+            self._mark_read_on_server(message)
         else:
             self._pending_open = (message.key, action)
             self._workers[message.account].open_message(message.folder, message.uid)
@@ -1016,19 +1021,13 @@ class MainFrame(wx.Frame):
             self._message_list.select_key(following.key)
         self._workers[message.account].perform(run, failure)
         if reading:
-            # Powrót na listę czyta następną wiadomość, a komunikat przychodzi po nim.
             self._pending_open = None
             self._show_view(self._message_list)
-            self.SetStatusText(status)
-            if announce or following is None:
-                wx.CallLater(AFTER_FOCUS_SPEECH_DELAY_MS, speak, status)
-            return
+        # NVDA sam czyta następną wiadomość, gdy przechodzi na nią zaznaczenie,
+        # a komunikat przychodzi po niej.
         self.SetStatusText(status)
-        if following is None:
-            speak(status)
-            return
-        sentence = message_sentence(following, self._row_account_name(following))
-        speak(f"{status}. {sentence}" if announce else sentence)
+        if announce or following is None:
+            wx.CallLater(AFTER_FOCUS_SPEECH_DELAY_MS, speak, status)
 
     def _toggle_read(self):
         message = self._selected_with_worker()

@@ -283,8 +283,7 @@ def test_results_wait_for_all_accounts_and_are_merged(frame):
     frame.on_search_done(ICLOUD.email, search_id, [("A", [message(3, 11)])])
     assert frame._mailbox_key == mf.SEARCH_KEY
     assert frame._message_list.selected_key() == (ICLOUD.email, "A", 3)
-    box = frame._message_list.list
-    assert box.GetCount() == 2
+    assert len(frame._message_list.texts()) == 2
     assert frame.GetTitle().startswith("Wyniki wyszukiwania")
     assert frame.spoken[-1].startswith("Znaleziono 2 wiadomości. nieprzeczytana, Jan, temat 3, iCloud")
 

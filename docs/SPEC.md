@@ -57,6 +57,8 @@ Program startuje od razu na liście wiadomości ze Wszystkich skrzynek, na najno
 
 Każdy wiersz NVDA czyta jednym zdaniem, zawsze w tej samej kolejności, a części puste są pomijane.
 
+Lista wiadomości to lista Windows taka jak w Eksploratorze: NVDA czyta zaznaczony wiersz raz, także po wejściu na listę, i dodaje pozycję, np. „1 z 3”. Przy zwykłej liście (ListBox) czytał go po wejściu dwa razy.
+
 Kolejność: **status, nadawca, temat, załączniki, konto, data**. Przykład: „nieprzeczytana, Jan Kowalski, Faktura za październik, 2 załączniki, iCloud, 13:20”.
 
 - Status mówimy tylko dla wiadomości nieprzeczytanych i oflagowanych; „przeczytana” nie jest czytane.
@@ -146,6 +148,7 @@ Przekazanie dalej zachowuje oryginalne załączniki. Wysłana wiadomość trafia
 Fokus nie skacze sam. Zmienia się po działaniu użytkownika, zawsze w przewidywalne miejsce, a jedynym wyjątkiem jest nowa wiadomość na widocznej liście.
 
 - Powrót Escape'em zawsze na ten sam element, z którego się weszło.
+- Pobieranie poczty w tle zmienia na liście tylko wiersze, które naprawdę się zmieniły, i nie zaznacza ponownie bieżącej wiadomości, więc NVDA nie czyta jej kilka razy.
 - Nowa wiadomość dopisuje się na górze listy (przy kolejności od najstarszych na dole), a zaznaczenie przechodzi na najnowszą i NVDA ją czyta. Dotyczy to tylko widocznej listy wiadomości: czytanie treści i pisanie nie są przerywane, a gdy program jest w tle, zaznaczenie przechodzi po cichu.
 - Pobranie poczty na żądanie (start, F5) kończy krótki dźwięk, a nowa poczta ma własny, dwutonowy, który można zamienić na plik MP3 lub WAV. Automatyczne odświeżenie bez nowej poczty jest ciche. Brak paska postępu czytanego przez NVDA.
 - Komunikaty statusu („Wysłano”, „Przeniesiono do kosza”) mówione przez NVDA jednym słowem lub krótkim zdaniem, bez okien dialogowych.

@@ -103,8 +103,7 @@ def load_all(window):
 
 
 def rows(window):
-    box = window._message_list.list
-    return [box.GetString(i) for i in range(box.GetCount())]
+    return window._message_list.texts()
 
 
 def key(window, code, ctrl=False, shift=False):
@@ -204,7 +203,7 @@ def test_new_mail_on_any_account_selects_it_in_all_mailboxes(frame):
     frame.on_messages(ICLOUD.email, "INBOX", [newest, message(1, 10)], True, True)
     assert frame.played == [NEW_MAIL]
     assert frame._message_list.selected_key() == (ICLOUD.email, "INBOX", 2)
-    assert frame.spoken[0].startswith("nieprzeczytana, Jan, nowy, iCloud, ")
+    assert frame.spoken == []
 
 
 def test_startup_stays_on_newest_as_accounts_arrive(frame):

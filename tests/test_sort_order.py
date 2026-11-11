@@ -126,7 +126,7 @@ def test_new_message_goes_to_bottom_and_takes_selection(oldest):
     assert oldest.played == [SYNCED, NEW_MAIL]
     assert shown_uids(oldest) == [1, 2, 3]
     assert oldest._message_list.selected_key() == ref(3)
-    assert oldest.spoken == ["nieprzeczytana, Jan, temat 3, iCloud"]
+    assert oldest.spoken == []
 
 
 def test_opened_folder_starts_at_newest(oldest):

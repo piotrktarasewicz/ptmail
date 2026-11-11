@@ -17,7 +17,7 @@ from ptmail.ui.message_view import MessageView
 from ptmail.ui.move_dialog import MoveDialog
 
 GW_HWNDPREV = 3
-FIELD_TYPES = (wx.TextCtrl, wx.Choice, wx.ListBox)
+FIELD_TYPES = (wx.TextCtrl, wx.Choice, wx.ListBox, wx.ListCtrl, wx.TreeCtrl)
 ACCOUNT = Account("iCloud", "ja@example.com", "icloud")
 
 _user32 = ctypes.WinDLL("user32")

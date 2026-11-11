@@ -234,8 +234,7 @@ def test_list_and_mailboxes_appear_from_cache_before_server(frame):
     frame._cache.save_folders(EMAIL, [Folder("INBOX", "Odebrane", "inbox", 1)])
     frame._cache.save_messages(EMAIL, "INBOX", [message(2), message(1, seen=True)])
     start(frame)
-    box = frame._message_list.list
-    assert box.GetCount() == 2
+    assert len(frame._message_list.texts()) == 2
     assert frame._message_list.selected_key() == key(2)
     assert frame._mailbox_view.texts()[0][1] == (
         "Wszystkie skrzynki, 1 nieprzeczytana"

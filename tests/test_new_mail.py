@@ -85,7 +85,8 @@ def test_new_message_takes_selection_and_is_read(frame):
     load(frame, 4, 3, 2, 1)
     assert frame.played == [SYNCED, NEW_MAIL]
     assert frame._message_list.selected_key() == ref(4)
-    assert frame.spoken == ["nieprzeczytana, Jan, temat 4, iCloud"]
+    # Wiersz czyta sam NVDA, gdy przechodzi na niego zaznaczenie.
+    assert frame.spoken == []
 
 
 def test_first_message_in_empty_folder_is_new(frame):

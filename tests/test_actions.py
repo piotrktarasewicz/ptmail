@@ -71,7 +71,12 @@ def frame(app, monkeypatch):
     monkeypatch.setattr(mf, "speak", spoken.append)
     monkeypatch.setattr(mf, "play", lambda name: None)
     delayed = []
-    monkeypatch.setattr(mf.wx, "CallLater", lambda ms, run, *args: delayed.append(args))
+    # Zapisujemy tylko odłożone komunikaty; fokus wiersza listy nie jest tu ważny.
+    monkeypatch.setattr(
+        mf.wx,
+        "CallLater",
+        lambda ms, run, *args: delayed.append(args) if run == spoken.append else None,
+    )
     window = mf.MainFrame()
     window._accounts = [ICLOUD]
     window.worker = FakeWorker()
@@ -121,7 +126,9 @@ def test_delete_moves_to_next_message_and_reads_it(frame):
     assert uids(frame) == [2, 1]
     assert frame.worker.client.calls == [("move", "INBOX", 3, "trash")]
     assert frame._message_list.selected_key() == ref(2)
-    assert frame.spoken == ["Jan, temat 2, iCloud"]
+    # Następną wiadomość NVDA czyta sam, gdy przechodzi na nią zaznaczenie.
+    assert frame.spoken == []
+    assert frame.delayed == []
     assert frame.GetStatusBar().GetStatusText() == "Przeniesiono do kosza"
     assert inbox_unread(frame) == 1
 
@@ -142,8 +149,8 @@ def test_delete_only_message_leaves_empty_list(frame):
     frame.on_messages(EMAIL, "INBOX", [message(5)], False)
     frame._message_list.select_key(ref(5))
     key(frame, wx.WXK_DELETE)
-    assert frame._message_list.list.GetCount() == 0
-    assert frame.spoken == ["Przeniesiono do kosza"]
+    assert frame._message_list.texts() == []
+    assert frame.delayed == [("Przeniesiono do kosza",)]
 
 
 def test_delete_from_message_view_returns_to_next_on_list(frame):
@@ -192,7 +199,7 @@ def test_failure_says_so_and_restores_from_server(frame):
 def test_archive_on_icloud_moves_to_archive(frame):
     key(frame, ord("A"), ctrl=True, shift=True)
     assert frame.worker.client.calls == [("move", "INBOX", 3, "archive")]
-    assert frame.spoken[0].startswith("Zarchiwizowano. ")
+    assert frame.delayed == [("Zarchiwizowano",)]
 
 
 def test_archive_on_gmail_removes_inbox_label(frame):
@@ -227,7 +234,7 @@ def test_move_offers_other_folders_and_moves(frame, monkeypatch):
     assert frame.worker.client.calls == [("move_to_folder", "INBOX", 3, "Archive")]
     assert uids(frame) == [2, 1]
     assert frame._message_list.selected_key() == ref(2)
-    assert frame.spoken == ["Przeniesiono do: Archiwum. Jan, temat 2, iCloud"]
+    assert frame.delayed == [("Przeniesiono do: Archiwum",)]
 
 
 def test_move_updates_unread_on_both_folders(frame, monkeypatch):
@@ -283,11 +290,11 @@ def test_toggle_read_keeps_selection_and_updates_row(frame):
     key(frame, ord("U"), ctrl=True)
     assert frame.worker.client.calls == [("set_flag", "INBOX", 3, "\\Seen", True)]
     assert frame._message_list.selected_key() == ref(3)
-    assert frame._message_list.list.GetString(0) == "Jan, temat 3, iCloud"
+    assert frame._message_list.texts()[0] == "Jan, temat 3, iCloud"
     assert inbox_unread(frame) == 1
     assert frame.spoken == ["Oznaczono jako przeczytaną"]
     key(frame, ord("U"), ctrl=True)
-    assert frame._message_list.list.GetString(0).startswith("nieprzeczytana")
+    assert frame._message_list.texts()[0].startswith("nieprzeczytana")
     assert inbox_unread(frame) == 2
     assert frame._message_list.selected_key() == ref(3)
 
@@ -307,7 +314,7 @@ def test_toggle_flag(frame):
     frame._message_list.select_key(ref(2))
     key(frame, ord("F"), ctrl=True, shift=True)
     assert frame.worker.client.calls == [("set_flag", "INBOX", 2, "\\Flagged", True)]
-    assert frame._message_list.list.GetString(1).startswith("oflagowana, Jan")
+    assert frame._message_list.texts()[1].startswith("oflagowana, Jan")
     assert frame._message_list.selected_key() == ref(2)
     key(frame, ord("F"), ctrl=True, shift=True)
     assert frame.spoken == ["Oflagowano", "Zdjęto flagę"]
